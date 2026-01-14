@@ -1,1 +1,1 @@
-# SmartRoomRentalSystem-FE
+# SmartRoomRentalSystem-BE
