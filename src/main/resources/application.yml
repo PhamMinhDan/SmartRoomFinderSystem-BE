@@ -46,12 +46,6 @@ spring:
             authorization-grant-type: authorization_code
             client-authentication-method: client_secret_basic
 
-          facebook:
-            client-id: ${CLIENT_ID_FB}
-            client-secret: ${CLIENT_SECRET_FB}
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            scope: email, public_profile
-
         provider:
           google:
             authorization-uri: https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&prompt=consent
@@ -59,12 +53,6 @@ spring:
             jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
             user-name-attribute: sub
             user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
-
-          facebook:
-            authorization-uri: https://www.facebook.com/v23.0/dialog/oauth
-            token-uri: https://graph.facebook.com/oauth/access_token
-            user-info-uri: https://graph.facebook.com/me?fields=id,name,email,picture.type(large)
-            user-name-attribute: id
 
   cors:
     allowed-origins:

@@ -30,23 +30,26 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
-    public String generateAccessToken(String username, String userId) {
+    public String generateAccessToken(String username, String userId, Integer tokenVersion) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put("type", "ACCESS");
+        claims.put("tokenVersion", tokenVersion);
 
         return createToken(claims, username, jwtExpiration);
     }
 
-    public String generateRefreshToken(String username, String userId) {
+    public String generateRefreshToken(String username, String userId, Integer tokenVersion) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put("type", "REFRESH");
+        claims.put("tokenVersion", tokenVersion);
 
         return createToken(claims, username, refreshTokenExpiration);
     }
+
 
     private String createToken(Map<String, Object> claims, String subject, long expiration) {
         Date now = new Date();
@@ -115,23 +118,25 @@ public class JwtUtil {
         }
     }
 
-
-    public Claims getClaimsFromToken(String token) {
+    public Integer getTokenVersionFromToken(String token) {
         try {
             if (token.startsWith("Bearer ")) {
                 token = token.substring(7);
             }
 
-            return Jwts.parser()
+            Claims claims = Jwts.parser()
                     .verifyWith(getSigningKey())
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
 
+            return claims.get("tokenVersion", Integer.class);
+
         } catch (JwtException e) {
-            log.error("Error extracting claims from token: {}", e.getMessage());
+            log.error("Error extracting tokenVersion from token: {}", e.getMessage());
             return null;
         }
     }
+
 
 }
