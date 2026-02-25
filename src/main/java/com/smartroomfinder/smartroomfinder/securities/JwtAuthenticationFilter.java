@@ -1,5 +1,7 @@
 package com.smartroomfinder.smartroomfinder.securities;
 
+import com.smartroomfinder.smartroomfinder.entities.Users;
+import com.smartroomfinder.smartroomfinder.repositories.UserRepository;
 import com.smartroomfinder.smartroomfinder.utils.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -22,6 +25,7 @@ import java.util.ArrayList;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -30,10 +34,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = getJwtFromRequest(request);
 
             if (token != null && jwtUtil.validateToken(token)) {
+
                 String username = jwtUtil.getUsernameFromToken(token);
                 String userId = jwtUtil.getUserIdFromToken(token);
+                Integer tokenVersionFromToken = jwtUtil.getTokenVersionFromToken(token);
 
-                log.debug("JWT Token validated for user: {}", username);
+                Users user = userRepository.findById(UUID.fromString(userId))
+                        .orElseThrow(() -> new RuntimeException("User not found"));
+
+                if (!tokenVersionFromToken.equals(user.getTokenVersion())) {
+                    log.warn("Token version mismatch for user: {}", username);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
@@ -44,6 +57,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
+
         } catch (Exception e) {
             log.debug("Could not set user authentication: {}", e.getMessage());
         }
