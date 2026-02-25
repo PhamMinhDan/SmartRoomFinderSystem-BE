@@ -63,8 +63,18 @@ public class AuthGoogleService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getUserId().toString());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername(), user.getUserId().toString());
+        String accessToken = jwtUtil.generateAccessToken(
+                user.getUsername(),
+                user.getUserId().toString(),
+                user.getTokenVersion()
+        );
+
+        String refreshToken = jwtUtil.generateRefreshToken(
+                user.getUsername(),
+                user.getUserId().toString(),
+                user.getTokenVersion()
+        );
+
 
         user.setAccessToken(accessToken);
         user.setRefreshToken(refreshToken);
@@ -180,22 +190,22 @@ public class AuthGoogleService {
     }
 
     @Transactional
-    public void logout(String userId) {
-        try {
-            UUID parsedUserId = UUID.fromString(userId);
-            Optional<Users> userOpt = userRepository.findById(parsedUserId);
+    public void logout(String token) {
 
-            if (userOpt.isPresent()) {
-                Users user = userOpt.get();
-                user.setAccessToken(null);
-                user.setRefreshToken(null);
-                user.setAccessTokenExpiresAt(null);
-                user.setRefreshTokenExpiresAt(null);
-                userRepository.save(user);
-                log.info("User logout successfully - UserId: {}", userId);
-            }
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid userId format: {}", userId);
+        if (!jwtUtil.validateToken(token)) {
+            throw new RuntimeException("Invalid token");
         }
+        String userId = jwtUtil.getUserIdFromToken(token);
+        UUID parsedUserId = UUID.fromString(userId);
+
+        Users user = userRepository.findById(parsedUserId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setTokenVersion(user.getTokenVersion() + 1);
+
+        userRepository.save(user);
+
+        log.info("User logged out. Token version increased - UserId: {}", userId);
     }
+
 }

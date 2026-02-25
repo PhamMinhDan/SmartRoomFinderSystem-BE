@@ -1,6 +1,5 @@
 package com.smartroomfinder.smartroomfinder.securities;
 
-import com.smartroomfinder.smartroomfinder.handler.OAuth2FBSuccessHandler;
 import com.smartroomfinder.smartroomfinder.handler.OAuth2GGSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +20,6 @@ public class Security {
 
     private final OAuth2GGSuccessHandler oAuth2GGSuccessHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final OAuth2FBSuccessHandler oAuth2FBSuccessHandler;
     private final CustomOAuth2UserService customOAuth2UserService;
 
 
@@ -47,16 +45,9 @@ public class Security {
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService)
                         )
-                        .successHandler((request, response, authentication) -> {
-                            String requestUri = request.getRequestURI();
-
-                            if (requestUri.contains("/facebook")) {
-                                oAuth2FBSuccessHandler.onAuthenticationSuccess(request, response, authentication);
-                            } else if (requestUri.contains("/google")) {
-                                oAuth2GGSuccessHandler.onAuthenticationSuccess(request, response, authentication);
-                            }
-                        })
+                        .successHandler(oAuth2GGSuccessHandler)
                 )
+
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable());

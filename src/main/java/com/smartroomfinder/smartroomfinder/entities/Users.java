@@ -126,4 +126,7 @@ public class Users {
 
     @Column(name = "updated_at", insertable = false)
     private LocalDateTime updatedAt;
+
+    @Column(nullable = false)
+    private Integer tokenVersion = 0;
 }
