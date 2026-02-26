@@ -165,6 +165,7 @@ public class AuthGoogleService {
                 .isActive(true)
                 .isBanned(false)
                 .identityVerified(false)
+                .tokenVersion(0)
                 .version(0L)
                 .createdAt(LocalDateTime.now())
                 .role_id(userRole)
