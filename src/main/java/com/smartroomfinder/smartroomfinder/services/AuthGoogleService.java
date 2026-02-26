@@ -1,9 +1,7 @@
 package com.smartroomfinder.smartroomfinder.services;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartroomfinder.smartroomfinder.dto.response.AuthGoogleResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.UserResponse;
 import com.smartroomfinder.smartroomfinder.entities.Roles;
@@ -14,14 +12,16 @@ import com.smartroomfinder.smartroomfinder.repositories.UserRepository;
 import com.smartroomfinder.smartroomfinder.utils.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.GeneralSecurityException;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,81 +35,130 @@ public class AuthGoogleService {
     private final JwtUtil jwtUtil;
     private final UserMapper userMapper;
 
-    @Value("${spring.security.oauth2.client.registration.google.client-id}")
-    private String googleClientId;
+    private static final String GOOGLE_TOKENINFO_URL =
+            "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=";
+
+    private static final String GOOGLE_USERINFO_URL =
+            "https://www.googleapis.com/oauth2/v3/userinfo";
 
     @Transactional
-    public AuthGoogleResponse loginWithGoogle(String idTokenString) throws GeneralSecurityException, IOException {
-        log.info("🔐 Processing Google login...");
+    public AuthGoogleResponse loginWithGoogle(String accessToken)
+            throws GeneralSecurityException, IOException {
+        log.info("🔐 Processing Google login with access_token...");
 
-        // Xác minh ID Token từ Google
-        GoogleIdToken idToken = verifyGoogleToken(idTokenString);
-        if (idToken == null) {
-            log.error("Invalid Google ID Token");
-            throw new RuntimeException("Invalid Google ID Token");
-        }
+        GoogleUserInfo userInfo = verifyAndGetUserInfo(accessToken);
 
-        GoogleIdToken.Payload payload = idToken.getPayload();
-        String googleId = payload.getSubject();
-        String email = payload.getEmail();
-        String fullName = (String) payload.get("name");
-        String picture = (String) payload.get("picture");
-        boolean emailVerified = payload.getEmailVerified();
+        log.info("Google token verified - Email: {}, GoogleId: {}", userInfo.email, userInfo.googleId);
 
-        log.info("Google token verified - Email: {}, GoogleId: {}", email, googleId);
-
-        Users user = findOrCreateUser(googleId, email, fullName, picture, emailVerified);
+        Users user = findOrCreateUser(
+                userInfo.googleId,
+                userInfo.email,
+                userInfo.fullName,
+                userInfo.picture,
+                userInfo.emailVerified
+        );
 
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        String accessToken = jwtUtil.generateAccessToken(
+        String jwtAccessToken = jwtUtil.generateAccessToken(
                 user.getUsername(),
                 user.getUserId().toString(),
                 user.getTokenVersion()
         );
 
-        String refreshToken = jwtUtil.generateRefreshToken(
+        String jwtRefreshToken = jwtUtil.generateRefreshToken(
                 user.getUsername(),
                 user.getUserId().toString(),
                 user.getTokenVersion()
         );
 
-
-        user.setAccessToken(accessToken);
-        user.setRefreshToken(refreshToken);
+        user.setAccessToken(jwtAccessToken);
+        user.setRefreshToken(jwtRefreshToken);
         user.setAccessTokenExpiresAt(LocalDateTime.now().plusHours(1));
         user.setRefreshTokenExpiresAt(LocalDateTime.now().plusDays(7));
         userRepository.save(user);
 
         log.info("User authenticated successfully - UserId: {}", user.getUserId());
 
-        // Tạo response
         UserResponse userResponse = userMapper.toResponse(user);
         return AuthGoogleResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-//                .userId(user.getUserId().toString())
+                .accessToken(jwtAccessToken)
+                .refreshToken(jwtRefreshToken)
                 .user(userResponse)
                 .message("Login successful")
                 .build();
     }
 
-    private GoogleIdToken verifyGoogleToken(String idTokenString) {
-        try {
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
-                    new NetHttpTransport(),
-                    GsonFactory.getDefaultInstance()
-            )
-                    .setAudience(Collections.singletonList(googleClientId))
-                    .build();
 
-            return verifier.verify(idTokenString);
-        } catch (GeneralSecurityException | IOException e) {
-            log.error("Error verifying Google token: {}", e.getMessage());
-            return null;
+    private GoogleUserInfo verifyAndGetUserInfo(String accessToken) throws IOException {
+        HttpClient httpClient = HttpClient.newHttpClient();
+
+        HttpRequest tokenInfoRequest = HttpRequest.newBuilder()
+                .uri(URI.create(GOOGLE_TOKENINFO_URL + accessToken))
+                .GET()
+                .build();
+
+        HttpResponse<String> tokenInfoResponse;
+        try {
+            tokenInfoResponse = httpClient.send(tokenInfoRequest,
+                    HttpResponse.BodyHandlers.ofString());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while verifying Google token", e);
         }
+
+        if (tokenInfoResponse.statusCode() != 200) {
+            log.error("Google tokeninfo returned {}: {}", tokenInfoResponse.statusCode(),
+                    tokenInfoResponse.body());
+            throw new RuntimeException("Invalid or expired Google access token");
+        }
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode tokenInfo = mapper.readTree(tokenInfoResponse.body());
+
+        JsonNode expiresIn = tokenInfo.get("expires_in");
+        if (expiresIn == null || expiresIn.asInt() <= 0) {
+            throw new RuntimeException("Google access token has expired");
+        }
+
+        HttpRequest userInfoRequest = HttpRequest.newBuilder()
+                .uri(URI.create(GOOGLE_USERINFO_URL))
+                .header("Authorization", "Bearer " + accessToken)
+                .GET()
+                .build();
+
+        HttpResponse<String> userInfoResponse;
+        try {
+            userInfoResponse = httpClient.send(userInfoRequest,
+                    HttpResponse.BodyHandlers.ofString());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while fetching Google user info", e);
+        }
+
+        if (userInfoResponse.statusCode() != 200) {
+            throw new RuntimeException("Failed to fetch Google user info");
+        }
+
+        JsonNode userInfo = mapper.readTree(userInfoResponse.body());
+
+        return new GoogleUserInfo(
+                userInfo.path("sub").asText(),          // googleId
+                userInfo.path("email").asText(),
+                userInfo.path("name").asText(null),
+                userInfo.path("picture").asText(null),
+                userInfo.path("email_verified").asBoolean(false)
+        );
     }
+
+    private record GoogleUserInfo(
+            String googleId,
+            String email,
+            String fullName,
+            String picture,
+            boolean emailVerified
+    ) {}
 
 
     private Users findOrCreateUser(String googleId, String email, String fullName,
@@ -117,14 +166,10 @@ public class AuthGoogleService {
 
         Optional<Users> existingUser = userRepository.findByGoogleId(googleId);
         if (existingUser.isPresent()) {
-            log.info(" User found by Google ID: {}", googleId);
+            log.info("User found by Google ID: {}", googleId);
             Users user = existingUser.get();
-
-            if (picture != null && !picture.isEmpty()) {
-                user.setAvatarUrl(picture);
-            }
+            if (picture != null && !picture.isEmpty()) user.setAvatarUrl(picture);
             user.setOauthEmailVerified(emailVerified);
-
             return user;
         }
 
@@ -132,18 +177,13 @@ public class AuthGoogleService {
         if (userByEmail.isPresent()) {
             log.info("User found by email: {}", email);
             Users user = userByEmail.get();
-
             if (user.getGoogleId() == null) {
                 user.setGoogleId(googleId);
                 user.setAuthProvider("GOOGLE");
                 user.setIsOAuthUser(true);
             }
-
-            if (picture != null && !picture.isEmpty()) {
-                user.setAvatarUrl(picture);
-            }
+            if (picture != null && !picture.isEmpty()) user.setAvatarUrl(picture);
             user.setOauthEmailVerified(emailVerified);
-
             return user;
         }
 
@@ -173,7 +213,6 @@ public class AuthGoogleService {
 
         Users savedUser = userRepository.save(newUser);
         log.info("New user created - UserId: {}, Email: {}", savedUser.getUserId(), email);
-
         return savedUser;
     }
 
@@ -181,18 +220,14 @@ public class AuthGoogleService {
         String baseUsername = email.split("@")[0];
         String username = baseUsername;
         int counter = 1;
-
         while (userRepository.existsByUsername(username)) {
-            username = baseUsername + counter;
-            counter++;
+            username = baseUsername + counter++;
         }
-
         return username;
     }
 
     @Transactional
     public void logout(String token) {
-
         if (!jwtUtil.validateToken(token)) {
             throw new RuntimeException("Invalid token");
         }
@@ -203,10 +238,8 @@ public class AuthGoogleService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         user.setTokenVersion(user.getTokenVersion() + 1);
-
         userRepository.save(user);
 
         log.info("User logged out. Token version increased - UserId: {}", userId);
     }
-
 }
