@@ -36,7 +36,6 @@ public class UserResponse {
     @JsonProperty("bio")
     private String bio;
 
-    // Address info - nested object
     @JsonProperty("address")
     private AddressResponse address;
 

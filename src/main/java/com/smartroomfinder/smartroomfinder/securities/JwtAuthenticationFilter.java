@@ -3,6 +3,8 @@ package com.smartroomfinder.smartroomfinder.securities;
 import com.smartroomfinder.smartroomfinder.entities.Users;
 import com.smartroomfinder.smartroomfinder.repositories.UserRepository;
 import com.smartroomfinder.smartroomfinder.utils.JwtUtil;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,50 +30,76 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String token = getJwtFromRequest(request);
+
+        if (token == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         try {
-            String token = getJwtFromRequest(request);
 
-            if (token != null && jwtUtil.validateToken(token)) {
+            Claims claims = jwtUtil.extractAllClaims(token);
 
-                String username = jwtUtil.getUsernameFromToken(token);
-                String userId = jwtUtil.getUserIdFromToken(token);
-                Integer tokenVersionFromToken = jwtUtil.getTokenVersionFromToken(token);
+            String username = claims.get("username", String.class);
+            String userId = claims.get("userId", String.class);
+            Integer tokenVersionFromToken = claims.get("tokenVersion", Integer.class);
 
-                Users user = userRepository.findById(UUID.fromString(userId))
-                        .orElseThrow(() -> new RuntimeException("User not found"));
+            Users user = userRepository.findById(UUID.fromString(userId))
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-                if (!tokenVersionFromToken.equals(user.getTokenVersion())) {
-                    log.warn("Token version mismatch for user: {}", username);
-                    filterChain.doFilter(request, response);
-                    return;
-                }
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                username,
-                                userId,
-                                new ArrayList<>()
-                        );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+            if (!tokenVersionFromToken.equals(user.getTokenVersion())) {
+                log.warn("Token version mismatch for user: {}", username);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
 
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            username,
+                            userId,
+                            new ArrayList<>()
+                    );
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        } catch (ExpiredJwtException e) {
+
+            log.debug("Access token expired");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+
         } catch (Exception e) {
-            log.debug("Could not set user authentication: {}", e.getMessage());
+
+            log.debug("Invalid JWT: {}", e.getMessage());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
 
         filterChain.doFilter(request, response);
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
+
         String bearerToken = request.getHeader("Authorization");
 
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+        if (bearerToken == null || !bearerToken.startsWith("Bearer ")) {
+            return null;
+        }
+        String token = bearerToken.substring(7);
+
+        if (token.isBlank()
+                || token.equals("null")
+                || token.equals("undefined")
+                || token.split("\\.").length != 3) {
+            return null;
         }
 
-        return null;
+        return token;
     }
 }

@@ -64,7 +64,6 @@ public class Users {
     @JoinColumn(name = "address_id")
     private Addresses address;
 
-    // ===== Identity Verification =====
     @Column(name = "identity_card", unique = true, length = 20)
     private String identityCard;
 
@@ -74,7 +73,6 @@ public class Users {
     @Column(name = "identity_verified_at")
     private LocalDateTime identityVerifiedAt;
 
-    // ===== Account Status =====
     @Column(name = "is_active")
     private Boolean isActive = true;
 
@@ -87,22 +85,8 @@ public class Users {
     @Column(name = "banned_at")
     private LocalDateTime bannedAt;
 
-    // ===== Token & Authentication Fields =====
-    @Column(name = "access_token", columnDefinition = "LONGTEXT")
-    private String accessToken;
-
-    @Column(name = "refresh_token", columnDefinition = "LONGTEXT")
-    private String refreshToken;
-
-    @Column(name = "access_token_expires_at")
-    private LocalDateTime accessTokenExpiresAt;
-
-    @Column(name = "refresh_token_expires_at")
-    private LocalDateTime refreshTokenExpiresAt;
-
-    // ===== OAuth Provider Fields =====
     @Column(name = "auth_provider", length = 50)
-    private String authProvider; // GOOGLE, FACEBOOK, LOCAL
+    private String authProvider;
 
     @Column(name = "google_id", length = 255, unique = true)
     private String googleId;
@@ -116,15 +100,13 @@ public class Users {
     @Column(name = "oauth_email_verified")
     private Boolean oauthEmailVerified = false;
 
-    // ===== Login Tracking =====
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
-    // ===== Audit Fields =====
-    @Column(name = "created_at", updatable = false, insertable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
