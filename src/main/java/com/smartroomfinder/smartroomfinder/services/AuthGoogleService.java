@@ -44,7 +44,7 @@ public class AuthGoogleService {
     @Transactional
     public AuthGoogleResponse loginWithGoogle(String accessToken)
             throws GeneralSecurityException, IOException {
-        log.info("🔐 Processing Google login with access_token...");
+        log.info("Processing Google login with access_token...");
 
         GoogleUserInfo userInfo = verifyAndGetUserInfo(accessToken);
 
@@ -73,10 +73,6 @@ public class AuthGoogleService {
                 user.getTokenVersion()
         );
 
-        user.setAccessToken(jwtAccessToken);
-        user.setRefreshToken(jwtRefreshToken);
-        user.setAccessTokenExpiresAt(LocalDateTime.now().plusHours(1));
-        user.setRefreshTokenExpiresAt(LocalDateTime.now().plusDays(7));
         userRepository.save(user);
 
         log.info("User authenticated successfully - UserId: {}", user.getUserId());

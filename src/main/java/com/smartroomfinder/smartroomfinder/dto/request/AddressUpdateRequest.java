@@ -15,26 +15,15 @@ import lombok.NoArgsConstructor;
 @Builder
 public class AddressUpdateRequest {
 
-    @Size(max = 500, message = "Street address không được vượt quá 500 ký tự")
+    @NotBlank(message = "Street address is required")
     private String streetAddress;
 
-    @Size(max = 100, message = "City name không được vượt quá 100 ký tự")
+    @NotBlank(message = "City name is required")
     private String cityName;
 
-    @Size(max = 100, message = "District name không được vượt quá 100 ký tự")
+    @NotBlank(message = "District name is required")
     private String districtName;
 
-    @Size(max = 100, message = "Ward name không được vượt quá 100 ký tự")
+    @NotBlank(message = "Ward name is required")
     private String wardName;
-
-    // Coordinates (latitude, longitude)
-    @DecimalMin(value = "-90.0", message = "Latitude phải >= -90.0")
-    @DecimalMax(value = "90.0", message = "Latitude phải <= 90.0")
-    private Double latitude;
-
-    @DecimalMin(value = "-180.0", message = "Longitude phải >= -180.0")
-    @DecimalMax(value = "180.0", message = "Longitude phải <= 180.0")
-    private Double longitude;
-
-    private Boolean isPrimary;
 }

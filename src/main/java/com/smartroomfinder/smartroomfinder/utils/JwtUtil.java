@@ -84,20 +84,6 @@ public class JwtUtil {
         return false;
     }
 
-    public String getUsernameFromToken(String token) {
-        try {
-            return Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload()
-                    .get("username", String.class);
-        } catch (JwtException e) {
-            log.error("Error extracting username from token: {}", e.getMessage());
-            return null;
-        }
-    }
-
     public String getUserIdFromToken(String token) {
         try {
             if (token.startsWith("Bearer ")) {
@@ -118,25 +104,13 @@ public class JwtUtil {
         }
     }
 
-    public Integer getTokenVersionFromToken(String token) {
-        try {
-            if (token.startsWith("Bearer ")) {
-                token = token.substring(7);
-            }
 
-            Claims claims = Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
-            return claims.get("tokenVersion", Integer.class);
-
-        } catch (JwtException e) {
-            log.error("Error extracting tokenVersion from token: {}", e.getMessage());
-            return null;
-        }
+    public Claims extractAllClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
-
 
 }
