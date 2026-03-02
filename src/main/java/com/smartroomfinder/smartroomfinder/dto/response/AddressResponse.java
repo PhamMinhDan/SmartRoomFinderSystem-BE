@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -30,10 +31,10 @@ public class AddressResponse {
     private String wardName;
 
     @JsonProperty("latitude")
-    private Double latitude;
+    private BigDecimal latitude;
 
     @JsonProperty("longitude")
-    private Double longitude;
+    private BigDecimal longitude;
 
     @JsonProperty("is_primary")
     private Boolean isPrimary;
