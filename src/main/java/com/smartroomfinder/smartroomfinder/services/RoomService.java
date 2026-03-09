@@ -1,0 +1,156 @@
+package com.smartroomfinder.smartroomfinder.services;
+
+import com.smartroomfinder.smartroomfinder.dto.request.CreateRoomRequest;
+import com.smartroomfinder.smartroomfinder.dto.response.RoomResponse;
+import com.smartroomfinder.smartroomfinder.entities.*;
+import com.smartroomfinder.smartroomfinder.mappers.RoomMapper;
+import com.smartroomfinder.smartroomfinder.repositories.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.*;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class RoomService {
+
+    private final RoomRepository roomRepository;
+    private final AmenityRepository amenityRepository;
+    private final UserRepository userRepository;
+    private final RoomMapper roomMapper;
+
+    // ── Create ────────────────────────────────────────────────────
+    @Transactional
+    public RoomResponse createRoom(CreateRoomRequest req, UUID userId) {
+        Users landlord = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        Rooms room = Rooms.builder()
+                .landlord(landlord)
+                .title(req.getTitle())
+                .description(req.getDescription())
+                .address(req.getAddress())
+                .cityName(req.getCityName())
+                .districtName(req.getDistrictName())
+                .wardName(req.getWardName())
+                .latitude(req.getLatitude())
+                .longitude(req.getLongitude())
+                .areaSize(req.getAreaSize())
+                .pricePerMonth(req.getPricePerMonth())
+                .depositAmount(req.getDepositAmount())
+                .capacity(req.getCapacity() != null ? req.getCapacity() : 1)
+                .roomType(req.getRoomType())
+                .furnishLevel(req.getFurnishLevel())
+                .availableFrom(req.getAvailableFrom())
+                .build();
+
+        Rooms saved = roomRepository.save(room);
+
+        if (req.getImageUrls() != null) {
+            for (int i = 0; i < req.getImageUrls().size(); i++) {
+                saved.getImages().add(RoomImages.builder()
+                        .room(saved).imageUrl(req.getImageUrls().get(i))
+                        .imageOrder(i).isPrimary(i == 0).uploadedBy(landlord).build());
+            }
+        }
+
+        if (req.getAmenityIds() != null && !req.getAmenityIds().isEmpty()) {
+            List<Amenities> amenities = amenityRepository.findByAmenityIdIn(req.getAmenityIds());
+            amenities.forEach(a -> saved.getAmenities().add(
+                    RoomAmenities.builder().room(saved).amenity(a).build()));
+        }
+
+        Rooms result = roomRepository.save(saved);
+        log.info("Room created - roomId: {}, userId: {}", result.getRoomId(), userId);
+        return roomMapper.toResponse(result);
+    }
+
+    // ── Read ──────────────────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public RoomResponse getRoomById(Long roomId) {
+        Rooms room = roomRepository.findByIdWithDetails(roomId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+        return roomMapper.toResponse(room);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RoomResponse> getMyRooms(UUID userId, int page, int size) {
+        Users landlord = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return roomRepository.findByLandlordAndIsActiveTrue(landlord, pageable)
+                .map(roomMapper::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RoomResponse> getApprovedRooms(String city, String district, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return roomRepository.findApprovedRooms(city, district, pageable)
+                .map(roomMapper::toResponse);
+    }
+
+    // ── Update ────────────────────────────────────────────────────
+    @Transactional
+    public RoomResponse updateRoom(Long roomId, CreateRoomRequest req, UUID userId) {
+        Rooms room = roomRepository.findByIdWithDetails(roomId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+
+        if (!room.getLandlord().getUserId().equals(userId)) {
+            throw new AccessDeniedException("Bạn không có quyền chỉnh sửa phòng này");
+        }
+
+        room.setTitle(req.getTitle());
+        room.setDescription(req.getDescription());
+        room.setAddress(req.getAddress());
+        room.setCityName(req.getCityName());
+        room.setDistrictName(req.getDistrictName());
+        room.setWardName(req.getWardName());
+        room.setLatitude(req.getLatitude());
+        room.setLongitude(req.getLongitude());
+        room.setAreaSize(req.getAreaSize());
+        room.setPricePerMonth(req.getPricePerMonth());
+        room.setDepositAmount(req.getDepositAmount());
+        if (req.getCapacity() != null) room.setCapacity(req.getCapacity());
+        room.setRoomType(req.getRoomType());
+        room.setFurnishLevel(req.getFurnishLevel());
+        room.setAvailableFrom(req.getAvailableFrom());
+
+        if (req.getImageUrls() != null) {
+            room.getImages().clear();
+            for (int i = 0; i < req.getImageUrls().size(); i++) {
+                room.getImages().add(RoomImages.builder()
+                        .room(room).imageUrl(req.getImageUrls().get(i))
+                        .imageOrder(i).isPrimary(i == 0).uploadedBy(room.getLandlord()).build());
+            }
+        }
+
+        if (req.getAmenityIds() != null) {
+            room.getAmenities().clear();
+            List<Amenities> amenities = amenityRepository.findByAmenityIdIn(req.getAmenityIds());
+            amenities.forEach(a -> room.getAmenities().add(
+                    RoomAmenities.builder().room(room).amenity(a).build()));
+        }
+
+        return roomMapper.toResponse(roomRepository.save(room));
+    }
+
+    // ── Delete (soft) ─────────────────────────────────────────────
+    @Transactional
+    public void deleteRoom(Long roomId, UUID userId) {
+        Rooms room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+
+        if (!room.getLandlord().getUserId().equals(userId)) {
+            throw new AccessDeniedException("Bạn không có quyền xóa phòng này");
+        }
+
+        room.setIsActive(false);
+        roomRepository.save(room);
+        log.info("Room soft-deleted - roomId: {}", roomId);
+    }
+}
