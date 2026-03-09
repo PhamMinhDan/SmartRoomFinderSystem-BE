@@ -77,6 +77,9 @@ public class AddressServiceImpl implements AddressService {
         Users user = getUser(userId);
         Addresses address = addressRepository.findByUserAndIsPrimaryTrue(user)
                 .orElseThrow(() -> new RuntimeException("No primary address found"));
+
+        user.setAddress(null);
+        userRepository.save(user);
         addressRepository.delete(address);
     }
 
