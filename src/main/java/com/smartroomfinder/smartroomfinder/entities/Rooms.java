@@ -9,7 +9,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -126,9 +128,9 @@ public class Rooms {
     // ── Relations ─────────────────────────────────────────────────
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<RoomImages> images = new ArrayList<>();
+    private Set<RoomImages> images = new HashSet<>();
 
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<RoomAmenities> amenities = new ArrayList<>();
+    private Set<RoomAmenities> amenities = new HashSet<>();
 }

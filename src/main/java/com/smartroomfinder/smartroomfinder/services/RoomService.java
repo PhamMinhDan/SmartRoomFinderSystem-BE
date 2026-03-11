@@ -153,4 +153,30 @@ public class RoomService {
         roomRepository.save(room);
         log.info("Room soft-deleted - roomId: {}", roomId);
     }
+
+    // ── Increment view count (public, fire-and-forget) ────────────
+    @Transactional
+    public void incrementViewCount(Long roomId) {
+        roomRepository.findById(roomId).ifPresent(room -> {
+            int current = room.getViewCount() != null ? room.getViewCount() : 0;
+            room.setViewCount(current + 1);
+            roomRepository.save(room);
+        });
+    }
+
+    // ── Toggle isActive (ẩn/hiện tin) ─────────────────────────────
+    @Transactional
+    public RoomResponse setRoomActive(Long roomId, UUID userId, boolean isActive) {
+        Rooms room = roomRepository.findByIdWithDetails(roomId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+
+        if (!room.getLandlord().getUserId().equals(userId)) {
+            throw new AccessDeniedException("Bạn không có quyền thay đổi trạng thái phòng này");
+        }
+
+        room.setIsActive(isActive);
+        Rooms saved = roomRepository.save(room);
+        log.info("Room isActive={} - roomId: {}, userId: {}", isActive, roomId, userId);
+        return roomMapper.toResponse(saved);
+    }
 }

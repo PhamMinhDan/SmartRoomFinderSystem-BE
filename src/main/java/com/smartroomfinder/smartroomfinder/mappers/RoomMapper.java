@@ -8,6 +8,7 @@ import com.smartroomfinder.smartroomfinder.entities.RoomImages;
 import com.smartroomfinder.smartroomfinder.entities.Rooms;
 import org.springframework.stereotype.Component;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Component
@@ -22,8 +23,9 @@ public class RoomMapper {
                         .map(this::toImageResponse)
                         .toList();
 
-        List<AmenityResponse> amenities = room.getAmenities() == null ? List.of() :
+        List<AmenityResponse> amenities =
                 room.getAmenities().stream()
+                        .sorted(Comparator.comparing(a -> a.getAmenity().getAmenityName()))
                         .map(this::toAmenityResponse)
                         .toList();
 
@@ -52,7 +54,7 @@ public class RoomMapper {
                 .averageRating(room.getAverageRating())
                 .totalReviews(room.getTotalReviews())
                 .landlordId(room.getLandlord().getUserId() != null
-                        ? room.getLandlord().getUserId().getMostSignificantBits() : null)
+                        ? room.getLandlord().getUserId().toString() : null)
                 .landlordName(room.getLandlord().getFullName())
                 .landlordAvatar(room.getLandlord().getAvatarUrl())
                 .images(images)
