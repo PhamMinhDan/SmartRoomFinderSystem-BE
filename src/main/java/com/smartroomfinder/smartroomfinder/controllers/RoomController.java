@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -109,7 +110,44 @@ public class RoomController {
         }
     }
 
-    // Giống hệt AddressController
+    /**
+     * Increment view count — called by frontend when detail page loads.
+     * No auth required (public).
+     */
+    @PostMapping("/{id}/view")
+    public ResponseEntity<Void> incrementView(@PathVariable Long id) {
+        try {
+            roomService.incrementViewCount(id);
+        } catch (Exception ignored) {}
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Toggle isActive (ẩn/hiện tin) — only landlord who owns the room.
+     */
+    @PatchMapping("/{id}/active")
+    public ResponseEntity<ApiResponse<RoomResponse>> toggleActive(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> body) {
+        try {
+            UUID userId = extractUserId();
+            Boolean isActive = body.get("isActive");
+            if (isActive == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("isActive is required", "BAD_REQUEST"));
+            }
+            RoomResponse result = roomService.setRoomActive(id, userId, isActive);
+            String msg = isActive ? "Hiện tin thành công" : "Ẩn tin thành công";
+            return ResponseEntity.ok(ApiResponse.success(result, msg));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage(), "UNAUTHORIZED"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(e.getMessage(), "BAD_REQUEST"));
+        }
+    }
+
     private UUID extractUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getCredentials() == null) {
