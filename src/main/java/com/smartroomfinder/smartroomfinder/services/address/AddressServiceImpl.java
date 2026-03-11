@@ -10,7 +10,9 @@ import com.smartroomfinder.smartroomfinder.mappers.AddressMapper;
 import com.smartroomfinder.smartroomfinder.repositories.AddressRepository;
 import com.smartroomfinder.smartroomfinder.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,8 @@ public class AddressServiceImpl implements AddressService {
     private final AddressMapper addressMapper;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    @Value("${mapbox.token}")
+    private String MAPBOX_TOKEN;
 
     @Override
     public AddressResponse getPrimaryAddress(UUID userId) {
@@ -98,48 +102,46 @@ public class AddressServiceImpl implements AddressService {
 
 
     private BigDecimal[] geocode(String address) {
+
         try {
-            // Encode query param thủ công — tránh lỗi encode tiếng Việt
-            String encodedQuery = URLEncoder.encode(address, StandardCharsets.UTF_8);
-            String url = "https://nominatim.openstreetmap.org/search"
-                    + "?q=" + encodedQuery
-                    + "&format=json"
+
+            String url = "https://api.mapbox.com/geocoding/v5/mapbox.places/"
+                    + address
+                    + ".json?access_token=" + MAPBOX_TOKEN
                     + "&limit=1"
-                    + "&countrycodes=vn"
-                    + "&accept-language=vi";
+                    + "&country=vn"
+                    + "&language=vi";
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.USER_AGENT, "SmartRoomFinder/1.0 (contact@smartroomfinder.com)");
-            headers.set(HttpHeaders.ACCEPT, "application/json");
-            ResponseEntity<String> response = restTemplate.exchange(
-                    URI.create(url),
-                    HttpMethod.GET,
-                    new HttpEntity<>(headers),
-                    String.class
-            );
+            log.info("Mapbox URL: {}", url);
 
-            log.debug("Nominatim response: {}", response.getBody());
+            ResponseEntity<String> response =
+                    restTemplate.getForEntity(url, String.class);
 
             JsonNode root = objectMapper.readTree(response.getBody());
-            if (root.isArray() && root.size() > 0) {
-                JsonNode first = root.get(0);
-                BigDecimal lat = new BigDecimal(first.get("lat").asText());
-                BigDecimal lng = new BigDecimal(first.get("lon").asText());
-                log.info("Geocoded '{}' → lat={}, lng={}", address, lat, lng);
+
+            JsonNode features = root.get("features");
+
+            if (features != null && features.size() > 0) {
+
+                JsonNode center = features.get(0).get("center");
+
+                BigDecimal lng = new BigDecimal(center.get(0).asText());
+                BigDecimal lat = new BigDecimal(center.get(1).asText());
+
+                log.info("Mapbox geocode '{}' → lat={}, lng={}", address, lat, lng);
+
                 return new BigDecimal[]{lat, lng};
             }
 
-            log.warn("⚠Nominatim returned 0 results for: '{}'", address);
-
-            return geocodeFallback(address);
-
         } catch (Exception e) {
-            log.error("Geocoding error for '{}': {}", address, e.getMessage());
+
+            log.error("Mapbox geocode error: {}", e.getMessage());
         }
 
-        // Fallback cuối: Hà Nội center
-        log.warn("Using default Hanoi coordinates as final fallback");
-        return new BigDecimal[]{new BigDecimal("21.0285"), new BigDecimal("105.8542")};
+        return new BigDecimal[]{
+                new BigDecimal("21.0285"),
+                new BigDecimal("105.8542")
+        };
     }
 
     private BigDecimal[] geocodeFallback(String originalAddress) {
@@ -154,9 +156,13 @@ public class AddressServiceImpl implements AddressService {
                 log.info("Retrying geocode with simplified address: '{}'", simpleAddress);
 
                 String encodedQuery = URLEncoder.encode(simpleAddress, StandardCharsets.UTF_8);
-                String url = "https://nominatim.openstreetmap.org/search"
-                        + "?q=" + encodedQuery
-                        + "&format=json&limit=1&countrycodes=vn";
+                String url = "https://api.mapbox.com/geocoding/v5/mapbox.places/"
+                        + encodedQuery
+                        + ".json?access_token=" + MAPBOX_TOKEN
+                        + "&autocomplete=false"
+                        + "&limit=1"
+                        + "&country=vn"
+                        + "&language=vi";
 
                 HttpHeaders headers = new HttpHeaders();
                 headers.set(HttpHeaders.USER_AGENT, "SmartRoomFinder/1.0");
