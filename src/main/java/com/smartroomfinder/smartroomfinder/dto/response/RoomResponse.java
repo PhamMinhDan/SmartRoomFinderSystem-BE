@@ -46,7 +46,7 @@ public class RoomResponse {
     private Integer totalReviews;
 
     // Landlord info
-    private Long landlordId;
+    private String landlordId;
     private String landlordName;
     private String landlordAvatar;
 

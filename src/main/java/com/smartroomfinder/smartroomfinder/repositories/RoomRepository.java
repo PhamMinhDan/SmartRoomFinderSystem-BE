@@ -18,12 +18,12 @@ public interface RoomRepository extends JpaRepository<Rooms, Long> {
     Page<Rooms> findByLandlordAndIsActiveTrue(Users landlord, Pageable pageable);
 
     @Query("""
-        SELECT r FROM Rooms r
-        LEFT JOIN FETCH r.images
-        LEFT JOIN FETCH r.amenities ra
-        LEFT JOIN FETCH ra.amenity
-        WHERE r.roomId = :roomId AND r.isActive = true
-    """)
+SELECT DISTINCT r FROM Rooms r
+LEFT JOIN FETCH r.images
+LEFT JOIN FETCH r.amenities ra
+LEFT JOIN FETCH ra.amenity
+WHERE r.roomId = :roomId AND r.isActive = true
+""")
     Optional<Rooms> findByIdWithDetails(@Param("roomId") Long roomId);
 
     @Query("""
