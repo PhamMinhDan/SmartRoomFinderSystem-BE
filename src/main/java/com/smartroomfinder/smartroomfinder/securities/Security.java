@@ -38,7 +38,8 @@ public class Security {
                                 "/api/auth/**",
                                 "/api/upload/**",
                                 "/oauth2/**",
-                                "/login/oauth2/**"
+                                "/login/oauth2/**",
+                                "/api/ws-chat/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
