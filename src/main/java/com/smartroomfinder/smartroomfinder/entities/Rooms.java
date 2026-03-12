@@ -125,6 +125,10 @@ public class Rooms {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "display_until")
+    private LocalDateTime displayUntil;
+
+
     // ── Relations ─────────────────────────────────────────────────
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

@@ -27,12 +27,14 @@ WHERE r.roomId = :roomId AND r.isActive = true
     Optional<Rooms> findByIdWithDetails(@Param("roomId") Long roomId);
 
     @Query("""
-        SELECT r FROM Rooms r
-        WHERE r.isApproved = true AND r.isActive = true
-        AND (:city IS NULL OR r.cityName = :city)
-        AND (:district IS NULL OR r.districtName = :district)
-        ORDER BY r.createdAt DESC
-    """)
+    SELECT r FROM Rooms r
+    WHERE r.isApproved = true
+    AND r.isActive = true
+    AND r.displayUntil > CURRENT_TIMESTAMP
+    AND (:city IS NULL OR r.cityName = :city)
+    AND (:district IS NULL OR r.districtName = :district)
+    ORDER BY r.createdAt DESC
+""")
     Page<Rooms> findApprovedRooms(
             @Param("city") String city,
             @Param("district") String district,

@@ -63,6 +63,7 @@ public class AdminService {
 
         room.setIsApproved(true);
         room.setIsVerified(true);
+        room.setDisplayUntil(LocalDateTime.now().plusDays(15));
         roomRepository.save(room);
 
         log.info("Room approved by admin - roomId: {}", roomId);

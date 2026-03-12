@@ -110,10 +110,6 @@ public class RoomController {
         }
     }
 
-    /**
-     * Increment view count — called by frontend when detail page loads.
-     * No auth required (public).
-     */
     @PostMapping("/{id}/view")
     public ResponseEntity<Void> incrementView(@PathVariable Long id) {
         try {
@@ -122,9 +118,6 @@ public class RoomController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Toggle isActive (ẩn/hiện tin) — only landlord who owns the room.
-     */
     @PatchMapping("/{id}/active")
     public ResponseEntity<ApiResponse<RoomResponse>> toggleActive(
             @PathVariable Long id,

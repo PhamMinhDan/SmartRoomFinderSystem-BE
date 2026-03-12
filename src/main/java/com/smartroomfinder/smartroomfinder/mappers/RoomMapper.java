@@ -57,6 +57,8 @@ public class RoomMapper {
                         ? room.getLandlord().getUserId().toString() : null)
                 .landlordName(room.getLandlord().getFullName())
                 .landlordAvatar(room.getLandlord().getAvatarUrl())
+                .phoneNumber(room.getLandlord().getPhoneNumber())
+                .expiredAt(room.getDisplayUntil())
                 .images(images)
                 .amenities(amenities)
                 .createdAt(room.getCreatedAt())

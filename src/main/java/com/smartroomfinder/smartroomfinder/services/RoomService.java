@@ -12,6 +12,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Slf4j
@@ -23,12 +25,21 @@ public class RoomService {
     private final AmenityRepository amenityRepository;
     private final UserRepository userRepository;
     private final RoomMapper roomMapper;
+    private final MapboxService mapboxService;
 
     // ── Create ────────────────────────────────────────────────────
     @Transactional
     public RoomResponse createRoom(CreateRoomRequest req, UUID userId) {
         Users landlord = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        String fullAddress =
+                req.getAddress() + ", "
+                        + req.getWardName() + ", "
+                        + req.getDistrictName() + ", "
+                        + req.getCityName() + ", Vietnam";
+
+        BigDecimal[] latLng = mapboxService.geocode(fullAddress);
 
         Rooms room = Rooms.builder()
                 .landlord(landlord)
@@ -38,8 +49,11 @@ public class RoomService {
                 .cityName(req.getCityName())
                 .districtName(req.getDistrictName())
                 .wardName(req.getWardName())
-                .latitude(req.getLatitude())
-                .longitude(req.getLongitude())
+
+                // auto từ mapbox
+                .latitude(latLng[0])
+                .longitude(latLng[1])
+
                 .areaSize(req.getAreaSize())
                 .pricePerMonth(req.getPricePerMonth())
                 .depositAmount(req.getDepositAmount())
@@ -51,10 +65,11 @@ public class RoomService {
 
         Rooms saved = roomRepository.save(room);
 
-        if (req.getImageUrls() != null) {
-            for (int i = 0; i < req.getImageUrls().size(); i++) {
+
+        if (req.getMediaUrls() != null) {
+            for (int i = 0; i < req.getMediaUrls().size(); i++) {
                 saved.getImages().add(RoomImages.builder()
-                        .room(saved).imageUrl(req.getImageUrls().get(i))
+                        .room(saved).imageUrl(req.getMediaUrls().get(i))
                         .imageOrder(i).isPrimary(i == 0).uploadedBy(landlord).build());
             }
         }
@@ -120,11 +135,11 @@ public class RoomService {
         room.setFurnishLevel(req.getFurnishLevel());
         room.setAvailableFrom(req.getAvailableFrom());
 
-        if (req.getImageUrls() != null) {
+        if (req.getMediaUrls() != null) {
             room.getImages().clear();
-            for (int i = 0; i < req.getImageUrls().size(); i++) {
+            for (int i = 0; i < req.getMediaUrls().size(); i++) {
                 room.getImages().add(RoomImages.builder()
-                        .room(room).imageUrl(req.getImageUrls().get(i))
+                        .room(room).imageUrl(req.getMediaUrls().get(i))
                         .imageOrder(i).isPrimary(i == 0).uploadedBy(room.getLandlord()).build());
             }
         }
@@ -179,4 +194,5 @@ public class RoomService {
         log.info("Room isActive={} - roomId: {}, userId: {}", isActive, roomId, userId);
         return roomMapper.toResponse(saved);
     }
+
 }

@@ -44,11 +44,13 @@ public class RoomResponse {
     private Integer viewCount;
     private BigDecimal averageRating;
     private Integer totalReviews;
+    private LocalDateTime expiredAt;
 
     // Landlord info
     private String landlordId;
     private String landlordName;
     private String landlordAvatar;
+    private String phoneNumber;
 
     // Media & amenities
     private List<RoomImageResponse> images;
