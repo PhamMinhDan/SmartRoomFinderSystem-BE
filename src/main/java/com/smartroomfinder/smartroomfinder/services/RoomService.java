@@ -75,9 +75,17 @@ public class RoomService {
         }
 
         if (req.getAmenityIds() != null && !req.getAmenityIds().isEmpty()) {
-            List<Amenities> amenities = amenityRepository.findByAmenityIdIn(req.getAmenityIds());
+
+            Set<Long> uniqueAmenityIds = new HashSet<>(req.getAmenityIds());
+
+            List<Amenities> amenities = amenityRepository.findByAmenityIdIn(uniqueAmenityIds);
+
             amenities.forEach(a -> saved.getAmenities().add(
-                    RoomAmenities.builder().room(saved).amenity(a).build()));
+                    RoomAmenities.builder()
+                            .room(saved)
+                            .amenity(a)
+                            .build()
+            ));
         }
 
         Rooms result = roomRepository.save(saved);
@@ -109,7 +117,6 @@ public class RoomService {
                 .map(roomMapper::toResponse);
     }
 
-    // ── Update ────────────────────────────────────────────────────
     @Transactional
     public RoomResponse updateRoom(Long roomId, CreateRoomRequest req, UUID userId) {
         Rooms room = roomRepository.findByIdWithDetails(roomId)
@@ -125,8 +132,18 @@ public class RoomService {
         room.setCityName(req.getCityName());
         room.setDistrictName(req.getDistrictName());
         room.setWardName(req.getWardName());
-        room.setLatitude(req.getLatitude());
-        room.setLongitude(req.getLongitude());
+
+        // Re-geocode neu dia chi thay doi
+        if (req.getAddress() != null) {
+            String fullAddress = req.getAddress() + ", "
+                    + req.getWardName() + ", "
+                    + req.getDistrictName() + ", "
+                    + req.getCityName() + ", Vietnam";
+            BigDecimal[] latLng = mapboxService.geocode(fullAddress);
+            room.setLatitude(latLng[0]);
+            room.setLongitude(latLng[1]);
+        }
+
         room.setAreaSize(req.getAreaSize());
         room.setPricePerMonth(req.getPricePerMonth());
         room.setDepositAmount(req.getDepositAmount());
@@ -134,6 +151,7 @@ public class RoomService {
         room.setRoomType(req.getRoomType());
         room.setFurnishLevel(req.getFurnishLevel());
         room.setAvailableFrom(req.getAvailableFrom());
+        // KHONG set displayUntil -> giu nguyen ngay hien thi goc, chi updatedAt tu cap nhat
 
         if (req.getMediaUrls() != null) {
             room.getImages().clear();
@@ -145,10 +163,20 @@ public class RoomService {
         }
 
         if (req.getAmenityIds() != null) {
+
             room.getAmenities().clear();
-            List<Amenities> amenities = amenityRepository.findByAmenityIdIn(req.getAmenityIds());
+            roomRepository.saveAndFlush(room); // flush delete trước
+
+            Set<Long> uniqueAmenityIds = new HashSet<>(req.getAmenityIds());
+
+            List<Amenities> amenities = amenityRepository.findByAmenityIdIn(uniqueAmenityIds);
+
             amenities.forEach(a -> room.getAmenities().add(
-                    RoomAmenities.builder().room(room).amenity(a).build()));
+                    RoomAmenities.builder()
+                            .room(room)
+                            .amenity(a)
+                            .build()
+            ));
         }
 
         return roomMapper.toResponse(roomRepository.save(room));
