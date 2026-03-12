@@ -19,6 +19,13 @@ public class CreateRoomRequest {
 
     private String description;
 
+    @NotBlank(message = "Vui lòng chọn loại phòng")
+    @Pattern(
+            regexp = "APARTMENT|MOTEL|MINI_APARTMENT",
+            message = "Loại phòng không hợp lệ"
+    )
+    private String roomType;
+
     // ── Address ──────────────────────────────────────────────────
     @NotBlank(message = "Địa chỉ không được để trống")
     private String address;
@@ -46,13 +53,14 @@ public class CreateRoomRequest {
     @DecimalMin(value = "0", message = "Tiền cọc không được âm")
     private BigDecimal depositAmount;
 
+    @Min(value = 1, message = "Số người tối thiểu là 1")
+    @Max(value = 5, message = "Số người tối đa là 5")
     private Integer capacity;
-    private String roomType;
     private String furnishLevel;
     private LocalDate availableFrom;
 
     // ── Media ─────────────────────────────────────────────────────
-    private List<String> imageUrls;
+    private List<String> mediaUrls;
 
     // ── Amenities ─────────────────────────────────────────────────
     private List<Long> amenityIds;

@@ -24,10 +24,10 @@ public class CloudinaryService {
 
         if (isVideo) {
             options.put("resource_type", "video");
-            options.put("quality", "auto"); // tối ưu nhưng không mờ
+            options.put("quality", "auto");
         } else {
             options.put("resource_type", "image");
-            options.put("quality", "auto:good"); // giữ nét tốt
+            options.put("quality", "auto:good");
             options.put("fetch_format", "auto");
             options.put("crop", "limit");
             options.put("width", 2000);
