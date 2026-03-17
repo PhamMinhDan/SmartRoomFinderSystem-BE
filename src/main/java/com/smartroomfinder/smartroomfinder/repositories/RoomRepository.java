@@ -30,7 +30,7 @@ WHERE r.roomId = :roomId AND r.isActive = true
     SELECT r FROM Rooms r
     WHERE r.isApproved = true
     AND r.isActive = true
-    AND r.displayUntil > CURRENT_TIMESTAMP
+    AND (r.displayUntil IS NULL OR r.displayUntil > CURRENT_TIMESTAMP)
     AND (:city IS NULL OR r.cityName = :city)
     AND (:district IS NULL OR r.districtName = :district)
     ORDER BY r.createdAt DESC

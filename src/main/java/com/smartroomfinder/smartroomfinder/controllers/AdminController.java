@@ -3,9 +3,11 @@ package com.smartroomfinder.smartroomfinder.controllers;
 import com.smartroomfinder.smartroomfinder.dto.response.AdminRoomResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.ApiResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.IdentityVerificationResponse;
+import com.smartroomfinder.smartroomfinder.dto.response.RoomResponse;
 import com.smartroomfinder.smartroomfinder.entities.Users;
 import com.smartroomfinder.smartroomfinder.repositories.UserRepository;
 import com.smartroomfinder.smartroomfinder.services.AdminService;
+import com.smartroomfinder.smartroomfinder.services.RoomService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
+    private final RoomService roomService;
     private final UserRepository userRepository;
 
     // ── GET /api/admin/stats ──────────────────────────────────────
@@ -60,6 +63,21 @@ public class AdminController {
         try {
             requireAdmin();
             return ResponseEntity.ok(ApiResponse.success(adminService.getRoomDetail(id), "OK"));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(e.getMessage(), "FORBIDDEN"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(e.getMessage(), "NOT_FOUND"));
+        }
+    }
+
+    // ── GET /api/admin/room-detail/{id} (reuse RoomResponse for FE roomdetail) ──
+    @GetMapping("/room-detail/{id}")
+    public ResponseEntity<ApiResponse<RoomResponse>> getRoomDetailForAdmin(@PathVariable Long id) {
+        try {
+            requireAdmin();
+            return ResponseEntity.ok(ApiResponse.success(roomService.getRoomById(id), "OK"));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.error(e.getMessage(), "FORBIDDEN"));

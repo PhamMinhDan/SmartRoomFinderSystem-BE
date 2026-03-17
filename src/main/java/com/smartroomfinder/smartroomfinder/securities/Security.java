@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,13 +17,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true) // ✅ THÊM DÒNG NÀY
 @RequiredArgsConstructor
 public class Security {
 
     private final OAuth2GGSuccessHandler oAuth2GGSuccessHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomOAuth2UserService customOAuth2UserService;
-
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -54,7 +55,6 @@ public class Security {
                         )
                         .successHandler(oAuth2GGSuccessHandler)
                 )
-
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable());
