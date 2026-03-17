@@ -15,9 +15,6 @@ import java.util.UUID;
 @Repository
 public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
 
-    /**
-     * Lấy toàn bộ lịch sử chat giữa 2 user, sắp xếp tăng dần theo thời gian.
-     */
     @Query("""
         SELECT m FROM ChatMessage m
         JOIN FETCH m.sender
@@ -32,10 +29,7 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     """)
     List<ChatMessage> getConversation(@Param("user1") UUID user1, @Param("user2") UUID user2);
 
-    /**
-     * Lấy tin nhắn cuối cùng của mỗi cuộc trò chuyện mà user tham gia.
-     * Dùng subquery để lấy MAX(createdAt) per partner.
-     */
+
     @Query("""
         SELECT m FROM ChatMessage m
         JOIN FETCH m.sender s
@@ -57,9 +51,7 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     """)
     List<ChatMessage> findLatestConversations(@Param("userId") UUID userId);
 
-    /**
-     * Đếm số tin nhắn chưa đọc từ một sender cụ thể gửi cho receiver.
-     */
+
     @Query("""
         SELECT COUNT(m) FROM ChatMessage m
         WHERE m.sender.userId = :senderId
@@ -69,9 +61,7 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     """)
     long countUnread(@Param("senderId") UUID senderId, @Param("receiverId") UUID receiverId);
 
-    /**
-     * Đánh dấu tất cả tin nhắn từ sender gửi cho receiver là đã đọc.
-     */
+
     @Modifying
     @Transactional
     @Query("""
@@ -86,4 +76,25 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
             @Param("receiverId") UUID receiverId,
             @Param("readAt") LocalDateTime readAt
     );
+
+    @Query("""
+SELECT COUNT(m) FROM ChatMessage m
+WHERE (
+    (m.sender.userId = :user1 AND m.receiver.userId = :user2)
+    OR
+    (m.sender.userId = :user2 AND m.receiver.userId = :user1)
+)
+""")
+    long countConversation(UUID user1, UUID user2);
+
+
+    @Query("""
+SELECT MAX(m.createdAt) FROM ChatMessage m
+WHERE (
+    (m.sender.userId = :user1 AND m.receiver.userId = :user2)
+    OR
+    (m.sender.userId = :user2 AND m.receiver.userId = :user1)
+)
+""")
+    LocalDateTime getLastMessageTime(UUID user1, UUID user2);
 }
