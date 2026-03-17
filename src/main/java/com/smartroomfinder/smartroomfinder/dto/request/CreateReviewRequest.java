@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
@@ -17,4 +18,6 @@ public class CreateReviewRequest {
 
     @Size(max = 2000, message = "Comment must not exceed 2000 characters")
     private String comment;
+    @Size(max = 3, message = "Maximum 3 images per review")
+    private List<String> imageUrls;
 }

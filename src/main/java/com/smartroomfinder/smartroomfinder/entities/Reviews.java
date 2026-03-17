@@ -7,6 +7,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
@@ -41,6 +43,9 @@ public class Reviews {
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
 
+    @Column(name = "image_urls", columnDefinition = "TEXT")
+    private String imageUrls;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;
@@ -52,4 +57,23 @@ public class Reviews {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    // ── Helpers ────────────────────────────────────────────────────
+    public List<String> getImageUrlList() {
+        if (imageUrls == null || imageUrls.isBlank()) return new ArrayList<>();
+        List<String> list = new ArrayList<>();
+        for (String url : imageUrls.split(",")) {
+            String trimmed = url.trim();
+            if (!trimmed.isEmpty()) list.add(trimmed);
+        }
+        return list;
+    }
+
+    public void setImageUrlList(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            this.imageUrls = null;
+        } else {
+            this.imageUrls = String.join(",", urls);
+        }
+    }
 }

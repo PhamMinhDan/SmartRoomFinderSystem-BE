@@ -223,4 +223,54 @@ public class RoomService {
         return roomMapper.toResponse(saved);
     }
 
+    public Page<RoomResponse> getFeaturedRooms(int page, int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        LocalDateTime lastWeek = LocalDateTime.now().minusDays(7);
+
+        Page<Rooms> rooms = roomRepository.findFeaturedRooms(lastWeek, pageable);
+
+        return rooms.map(roomMapper::toResponse);
+    }
+
+    public Page<RoomResponse> searchRooms(
+            String city,
+            String district,
+            String roomType,
+            BigDecimal priceMin,
+            BigDecimal priceMax,
+            BigDecimal areaMin,
+            BigDecimal areaMax,
+            Double minRating,
+            List<String> amenities,
+            int page,
+            int size,
+            String sort
+    ) {
+
+        Sort sorting = switch (sort) {
+            case "price_asc" -> Sort.by("pricePerMonth").ascending();
+            case "price_desc" -> Sort.by("pricePerMonth").descending();
+            default -> Sort.by("createdAt").descending();
+        };
+
+        Pageable pageable = PageRequest.of(page, size, sorting);
+
+        Page<Rooms> rooms = roomRepository.searchRooms(
+                city,
+                district,
+                roomType,
+                priceMin,
+                priceMax,
+                areaMin,
+                areaMax,
+                minRating,
+                (amenities == null || amenities.isEmpty()) ? null : amenities,
+                pageable
+        );
+
+        return rooms.map(roomMapper::toResponse);
+    }
+
 }

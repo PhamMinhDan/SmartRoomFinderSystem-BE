@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,6 +23,22 @@ public interface ReviewRepository extends JpaRepository<Reviews, Long> {
     Optional<Reviews> findByRoomAndUser(Rooms room, Users user);
 
     boolean existsByRoomAndUser(Rooms room, Users user);
+
+    Page<Reviews> findByRoom_RoomId(Long roomId, Pageable pageable);
+
+    Page<Reviews> findByRoom_RoomIdAndRatingBetween(
+            Long roomId,
+            BigDecimal min,
+            BigDecimal max,
+            Pageable pageable
+    );
+    @Query("""
+    SELECT FLOOR(r.rating), COUNT(r)
+    FROM Reviews r
+    WHERE r.room.roomId = :roomId
+    GROUP BY FLOOR(r.rating)
+""")
+    List<Object[]> countReviewsByStar(@Param("roomId") Long roomId);
 
     @Query("SELECT r FROM Reviews r JOIN FETCH r.user WHERE r.room.roomId = :roomId AND r.isActive = true ORDER BY r.createdAt DESC")
     Page<Reviews> findByRoomIdWithUser(@Param("roomId") Long roomId, Pageable pageable);

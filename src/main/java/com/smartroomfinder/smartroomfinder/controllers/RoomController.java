@@ -15,6 +15,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -69,13 +71,40 @@ public class RoomController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<RoomResponse>>> listRooms(
+    public ResponseEntity<ApiResponse<Page<RoomResponse>>> searchRooms(
             @RequestParam(required = false) String city,
             @RequestParam(required = false) String district,
+            @RequestParam(required = false) String roomType,
+            @RequestParam(required = false) BigDecimal priceMin,
+            @RequestParam(required = false) BigDecimal priceMax,
+            @RequestParam(required = false) BigDecimal areaMin,
+            @RequestParam(required = false) BigDecimal areaMax,
+            @RequestParam(required = false) Double minRating,
+            @RequestParam(required = false) List<String> amenities,
+            @RequestParam(defaultValue = "newest") String sort,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "12") int size) {
-        return ResponseEntity.ok(ApiResponse.success(
-                roomService.getApprovedRooms(city, district, page, size), "OK"));
+            @RequestParam(defaultValue = "12") int size
+    ) {
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        roomService.searchRooms(
+                                city,
+                                district,
+                                roomType,
+                                priceMin,
+                                priceMax,
+                                areaMin,
+                                areaMax,
+                                minRating,
+                                amenities,
+                                page,
+                                size,
+                                sort
+                        ),
+                        "OK"
+                )
+        );
     }
 
     @PutMapping("/{id}")
@@ -147,5 +176,15 @@ public class RoomController {
             throw new IllegalStateException("Unauthorized: no authentication found");
         }
         return UUID.fromString(auth.getCredentials().toString());
+    }
+
+    @GetMapping("/featured")
+    public ResponseEntity<ApiResponse<Page<RoomResponse>>> getFeaturedRooms(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size) {
+
+        return ResponseEntity.ok(
+                ApiResponse.success(roomService.getFeaturedRooms(page, size), "OK")
+        );
     }
 }
