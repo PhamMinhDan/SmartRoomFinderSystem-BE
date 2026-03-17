@@ -16,6 +16,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -26,10 +27,6 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
-    /**
-     * POST /api/rooms/{roomId}/reviews
-     * Create or update (upsert) a review for the authenticated user.
-     */
     @PostMapping
     public ResponseEntity<ApiResponse<ReviewResponse>> createReview(
             @PathVariable Long roomId,
@@ -47,33 +44,41 @@ public class ReviewController {
         }
     }
 
-    /**
-     * GET /api/rooms/{roomId}/reviews?page=0&size=10
-     * Publicly accessible — returns paginated active reviews.
-     */
     @GetMapping
     public ResponseEntity<ApiResponse<Page<ReviewResponse>>> getReviews(
             @PathVariable Long roomId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false) Integer star,
+            @RequestParam(defaultValue = "latest") String sort) {
+
         return ResponseEntity.ok(
-                ApiResponse.success(reviewService.getReviewsByRoom(roomId, page, size), "OK"));
+                ApiResponse.success(
+                        reviewService.getReviewsFilter(roomId, page, size, star, sort),
+                        "OK"
+                )
+        );
     }
 
-    /**
-     * GET /api/rooms/{roomId}/reviews/stats
-     * Returns average rating and total review count.
-     */
+
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<RoomRatingStats>> getStats(@PathVariable Long roomId) {
         return ResponseEntity.ok(
                 ApiResponse.success(reviewService.getRatingStats(roomId), "OK"));
     }
 
-    /**
-     * DELETE /api/rooms/{roomId}/reviews/{reviewId}
-     * Soft-deletes the review (only owner can delete).
-     */
+    @GetMapping("/stats-count")
+    public ResponseEntity<ApiResponse<Map<Integer, Long>>> getReviewStats(
+            @PathVariable Long roomId) {
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        reviewService.getStarCounts(roomId),
+                        "OK"
+                )
+        );
+    }
+
     @DeleteMapping("/{reviewId}")
     public ResponseEntity<ApiResponse<Void>> deleteReview(
             @PathVariable Long roomId,
