@@ -33,11 +33,14 @@ public class ChatService {
     private final EncryptionService encryptionService;
     private final ChatMapper mapper;
     private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationService notificationService;
+    private final EmailService emailService;
 
 
     @Transactional
     public ChatMessageResponse saveAndSend(ChatMessageRequest req) throws Exception {
 
+        // ================= USER + ROOM =================
         Users sender = userRepo.findById(req.getSenderId())
                 .orElseThrow(() -> new RuntimeException("Sender not found: " + req.getSenderId()));
 
@@ -47,7 +50,30 @@ public class ChatService {
         Rooms room = roomRepo.findById(req.getRoomId())
                 .orElseThrow(() -> new RuntimeException("Room not found: " + req.getRoomId()));
 
-        // Mã hóa trước khi lưu
+        // ================= 🧠 CHECK TRƯỚC KHI SAVE =================
+        long total = chatRepo.countConversation(req.getSenderId(), req.getReceiverId());
+        LocalDateTime lastTime = chatRepo.getLastMessageTime(req.getSenderId(), req.getReceiverId());
+
+        boolean shouldNotify = false;
+
+        // lần đầu
+        if (total == 0) {
+            shouldNotify = true;
+        }
+
+        // > 1 giờ
+        if (lastTime != null && lastTime.isBefore(LocalDateTime.now().minusHours(30))) {
+            shouldNotify = true;
+        }
+
+        // > 30 tin
+        if (total >= 30) {
+            shouldNotify = true;
+        }
+
+        log.info("DEBUG NOTIFY → total={}, lastTime={}, shouldNotify={}", total, lastTime, shouldNotify);
+
+        // ================= SAVE MESSAGE =================
         String encrypted = encryptionService.encrypt(req.getMessage());
 
         ChatMessage message = ChatMessage.builder()
@@ -60,18 +86,17 @@ public class ChatService {
 
         ChatMessage saved = chatRepo.save(message);
 
-        // Set plaintext để map ra response (không trả ciphertext cho client)
+        // ================= RESPONSE =================
         saved.setMessageContent(req.getMessage());
         ChatMessageResponse response = mapper.toResponse(saved);
 
-        // Push đến receiver: /topic/chat.{receiverId}
+        // ================= 🔥 SOCKET CHAT =================
         messagingTemplate.convertAndSend(
-                "/topic/chat." + req.getReceiverId().toString(),
+                "/topic/chat." + req.getReceiverId(),
                 response
         );
 
-        // Push echo về sender (đồng bộ đa tab): /topic/chat.{senderId}
-        // Dùng type "ECHO" để frontend phân biệt, tránh duplicate optimistic message
+        // echo sender
         ChatMessageResponse echo = ChatMessageResponse.builder()
                 .messageId(saved.getMessageId())
                 .senderId(response.getSenderId())
@@ -85,11 +110,27 @@ public class ChatService {
                 .build();
 
         messagingTemplate.convertAndSend(
-                "/topic/chat." + req.getSenderId().toString(),
+                "/topic/chat." + req.getSenderId(),
                 echo
         );
 
-        log.info("Message saved & sent: {} -> {}", sender.getUsername(), receiver.getUsername());
+        // ================= 🔔 NOTIFICATION =================
+        if (shouldNotify) {
+
+            log.info("🔥 SEND NOTIFICATION → {}", receiver.getUsername());
+
+            notificationService.createNotification(
+                    req.getReceiverId(),
+                    "Bạn có tin nhắn mới",
+                    sender.getFullName() + " đã nhắn tin cho bạn",
+                    "/chat?user=" + sender.getUserId()
+            );
+
+            emailService.sendChatNotification(
+                    receiver.getEmail(),
+                    sender.getFullName()
+            );
+        }
 
         return response;
     }
