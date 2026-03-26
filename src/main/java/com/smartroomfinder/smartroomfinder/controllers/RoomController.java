@@ -150,17 +150,19 @@ public class RoomController {
     @PatchMapping("/{id}/active")
     public ResponseEntity<ApiResponse<RoomResponse>> toggleActive(
             @PathVariable Long id,
-            @RequestBody Map<String, Boolean> body) {
+            @RequestBody Map<String, Object> body) {
         try {
             UUID userId = extractUserId();
-            Boolean isActive = body.get("isActive");
-            if (isActive == null) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("isActive is required", "BAD_REQUEST"));
-            }
-            RoomResponse result = roomService.setRoomActive(id, userId, isActive);
-            String msg = isActive ? "Hiện tin thành công" : "Ẩn tin thành công";
-            return ResponseEntity.ok(ApiResponse.success(result, msg));
+
+            boolean isActive = (Boolean) body.get("isActive");
+            String reason = (String) body.getOrDefault("reason", null);
+
+            return ResponseEntity.ok(
+                    ApiResponse.success(
+                            roomService.setRoomActive(id, userId, isActive, reason),
+                            "Cập nhật trạng thái thành công"
+                    )
+            );
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error(e.getMessage(), "UNAUTHORIZED"));
@@ -185,6 +187,22 @@ public class RoomController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(roomService.getFeaturedRooms(page, size), "OK")
+        );
+    }
+
+    @PatchMapping("/{id}/extend")
+    public ResponseEntity<ApiResponse<RoomResponse>> extendRoom(
+            @PathVariable Long id,
+            @RequestBody Map<String, Integer> body) {
+
+        UUID userId = extractUserId();
+        int days = body.get("days");
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        roomService.extendRoom(id, userId, days),
+                        "Gia hạn thành công"
+                )
         );
     }
 }

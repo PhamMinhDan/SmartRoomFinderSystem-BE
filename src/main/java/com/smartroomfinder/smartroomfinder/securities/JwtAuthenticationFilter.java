@@ -61,19 +61,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // ✅ FIX: Build authorities từ user roles
+            //  FIX: Build authorities từ user roles
             Collection<GrantedAuthority> authorities = new ArrayList<>();
             if (user.getRole_id() != null) {
                 String roleName = user.getRole_id().getRoleName();
-                // ✅ Đảm bảo có tiền tố ROLE_
+                //  Đảm bảo có tiền tố ROLE_
                 String authority = roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
                 authorities.add(new SimpleGrantedAuthority(authority));
-                log.debug("✅ Added authority: {}", authority);
+                log.debug(" Added authority: {}", authority);
             } else {
-                log.warn("⚠️  User {} has no role assigned", username);
+                log.warn("  User {} has no role assigned", username);
             }
 
-            // ✅ FIX: Set credentials = userId (quan trọng cho extractUserId())
+            //  FIX: Set credentials = userId (quan trọng cho extractUserId())
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             username,           // principal
@@ -83,17 +83,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            log.info("✅ JWT authenticated - User: {}, Role: {}, Authorities: {}",
+            log.info(" JWT authenticated - User: {}, Role: {}, Authorities: {}",
                     username,
                     user.getRole_id() != null ? user.getRole_id().getRoleName() : "NONE",
                     authorities);
 
         } catch (ExpiredJwtException e) {
-            log.debug("❌ Access token expired");
+            log.debug(" Access token expired");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         } catch (Exception e) {
-            log.error("❌ Error in JWT filter: {}", e.getMessage());
+            log.error(" Error in JWT filter: {}", e.getMessage());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }

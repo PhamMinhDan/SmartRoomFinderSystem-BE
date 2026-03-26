@@ -106,7 +106,7 @@ public class RoomService {
         Users landlord = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return roomRepository.findByLandlordAndIsActiveTrue(landlord, pageable)
+        return roomRepository.findByLandlord(landlord, pageable)
                 .map(roomMapper::toResponse);
     }
 
@@ -209,7 +209,7 @@ public class RoomService {
 
     // ── Toggle isActive (ẩn/hiện tin) ─────────────────────────────
     @Transactional
-    public RoomResponse setRoomActive(Long roomId, UUID userId, boolean isActive) {
+    public RoomResponse setRoomActive(Long roomId, UUID userId, boolean isActive, String reason) {
         Rooms room = roomRepository.findByIdWithDetails(roomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
 
@@ -218,18 +218,33 @@ public class RoomService {
         }
 
         room.setIsActive(isActive);
+
+        if (!isActive) {
+            room.setHiddenReason(reason);
+            room.setHiddenAt(LocalDateTime.now());
+
+            room.setAvailabilityStatus("hidden");
+        } else {
+            room.setHiddenReason(null);
+            room.setHiddenAt(null);
+
+            room.setAvailabilityStatus("available");
+        }
+
         Rooms saved = roomRepository.save(room);
+
         log.info("Room isActive={} - roomId: {}, userId: {}", isActive, roomId, userId);
+
         return roomMapper.toResponse(saved);
     }
+
+
 
     public Page<RoomResponse> getFeaturedRooms(int page, int size) {
 
         Pageable pageable = PageRequest.of(page, size);
 
-        LocalDateTime lastWeek = LocalDateTime.now().minusDays(7);
-
-        Page<Rooms> rooms = roomRepository.findFeaturedRooms(lastWeek, pageable);
+        Page<Rooms> rooms = roomRepository.findFeaturedRooms(pageable);
 
         return rooms.map(roomMapper::toResponse);
     }
@@ -272,5 +287,23 @@ public class RoomService {
 
         return rooms.map(roomMapper::toResponse);
     }
+    @Transactional
+    public RoomResponse extendRoom(Long roomId, UUID userId, int days) {
+        Rooms room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
 
+        if (!room.getLandlord().getUserId().equals(userId)) {
+            throw new AccessDeniedException("Không có quyền");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        if (room.getDisplayUntil() == null || room.getDisplayUntil().isBefore(now)) {
+            room.setDisplayUntil(now.plusDays(days));
+        } else {
+            room.setDisplayUntil(room.getDisplayUntil().plusDays(days));
+        }
+
+        return roomMapper.toResponse(roomRepository.save(room));
+    }
 }

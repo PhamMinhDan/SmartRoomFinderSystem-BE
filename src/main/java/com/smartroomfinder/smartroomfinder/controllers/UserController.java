@@ -1,5 +1,6 @@
 package com.smartroomfinder.smartroomfinder.controllers;
 
+import com.smartroomfinder.smartroomfinder.dto.request.UserUpdateRequest;
 import com.smartroomfinder.smartroomfinder.dto.response.ApiResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.UserResponse;
 import com.smartroomfinder.smartroomfinder.services.UserService;
@@ -53,5 +54,19 @@ public class UserController {
                             e.getMessage()
                     ));
         }
+    }
+    @PutMapping("/update")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody UserUpdateRequest request
+    ) {
+        String token = authHeader.substring(7);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        userService.updateUser(token, request),
+                        "Cập nhật thành công"
+                )
+        );
     }
 }
