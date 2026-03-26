@@ -41,6 +41,7 @@ public class Security {
                                 "/oauth2/**",
                                 "/login/oauth2/**",
                                 "/api/ws-chat/**",
+                                "/ws-notification/**",
                                 "/api/rooms",
                                 "/api/rooms/**",
                                 "/api/rooms/*/reviews/**"

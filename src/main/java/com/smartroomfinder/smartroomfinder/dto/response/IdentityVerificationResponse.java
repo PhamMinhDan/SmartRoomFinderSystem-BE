@@ -20,6 +20,9 @@ public class IdentityVerificationResponse {
     private String selfieImageUrl;
     private String status;
     private String rejectReason;
+    private String fullName;
+    private String avatarUrl;
+    private String email;
     private LocalDateTime createdAt;
     private LocalDateTime reviewedAt;
 }
