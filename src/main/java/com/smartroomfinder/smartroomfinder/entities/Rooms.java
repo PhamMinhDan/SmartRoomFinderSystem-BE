@@ -128,6 +128,12 @@ public class Rooms {
     @Column(name = "display_until")
     private LocalDateTime displayUntil;
 
+    @Column(name = "hidden_reason", columnDefinition = "TEXT")
+    private String hiddenReason;
+
+    @Column(name = "hidden_at")
+    private LocalDateTime hiddenAt;
+
 
     // ── Relations ─────────────────────────────────────────────────
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)

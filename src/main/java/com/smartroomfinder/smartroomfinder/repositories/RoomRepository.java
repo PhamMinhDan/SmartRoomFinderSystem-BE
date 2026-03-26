@@ -24,7 +24,7 @@ SELECT DISTINCT r FROM Rooms r
 LEFT JOIN FETCH r.images
 LEFT JOIN FETCH r.amenities ra
 LEFT JOIN FETCH ra.amenity
-WHERE r.roomId = :roomId AND r.isActive = true
+WHERE r.roomId = :roomId 
 """)
     Optional<Rooms> findByIdWithDetails(@Param("roomId") Long roomId);
 
@@ -47,13 +47,20 @@ WHERE r.roomId = :roomId AND r.isActive = true
 SELECT r FROM Rooms r
 WHERE r.isApproved = true
 AND r.isActive = true
-AND r.createdAt >= :lastWeek
+AND r.availabilityStatus = 'available'
+
+AND (
+    r.viewCount > 100
+    OR r.averageRating >= 4.5
+)
+
 ORDER BY 
-    r.viewCount DESC,
     r.averageRating DESC,
-    r.totalReviews DESC
+    r.viewCount DESC,
+    r.totalReviews DESC,
+    r.createdAt DESC
 """)
-    Page<Rooms> findFeaturedRooms(LocalDateTime lastWeek, Pageable pageable);
+    Page<Rooms> findFeaturedRooms(Pageable pageable);
 
     @Query("""
 SELECT DISTINCT r FROM Rooms r
@@ -102,7 +109,7 @@ AND (:amenities IS NULL OR a.amenityName IN :amenities)
 
     long countByIsApprovedTrueAndIsActiveTrue();
 
-    List<Rooms> findByLandlord(Users landlord);
+    Page<Rooms> findByLandlord(Users landlord, Pageable pageable);
 
     long countByLandlord(Users landlord);
 }

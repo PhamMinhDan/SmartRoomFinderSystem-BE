@@ -52,6 +52,9 @@ public class RoomResponse {
     private String landlordAvatar;
     private String phoneNumber;
 
+    private String hiddenReason;
+    private LocalDateTime hiddenAt;
+
     // Media & amenities
     private List<RoomImageResponse> images;
     private List<AmenityResponse> amenities;

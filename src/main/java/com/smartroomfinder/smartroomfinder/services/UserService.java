@@ -1,5 +1,6 @@
 package com.smartroomfinder.smartroomfinder.services;
 
+import com.smartroomfinder.smartroomfinder.dto.request.UserUpdateRequest;
 import com.smartroomfinder.smartroomfinder.dto.response.UserResponse;
 import com.smartroomfinder.smartroomfinder.entities.Users;
 import com.smartroomfinder.smartroomfinder.mappers.UserMapper;
@@ -51,6 +52,21 @@ public class UserService {
             log.error("Invalid userId format: {}", e.getMessage());
             throw new RuntimeException("Invalid userId format");
         }
+    }
+
+    @Transactional
+    public UserResponse updateUser(String token, UserUpdateRequest request) {
+        String userId = jwtUtil.getUserIdFromToken(token);
+
+        Users user = userRepository.findById(UUID.fromString(userId))
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setFullName(request.getFullName());
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setBio(request.getBio());
+        user.setAvatarUrl(request.getAvatarUrl());
+
+        return userMapper.toResponse(userRepository.save(user));
     }
 
 }

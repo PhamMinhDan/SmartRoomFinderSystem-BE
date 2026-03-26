@@ -40,7 +40,10 @@ public class Security {
                                 "/api/upload/**",
                                 "/oauth2/**",
                                 "/login/oauth2/**",
-                                "/api/ws-chat/**"
+                                "/api/ws-chat/**",
+                                "/api/rooms",
+                                "/api/rooms/**",
+                                "/api/rooms/*/reviews/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
