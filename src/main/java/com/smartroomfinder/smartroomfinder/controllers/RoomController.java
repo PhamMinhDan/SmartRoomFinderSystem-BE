@@ -139,14 +139,6 @@ public class RoomController {
         }
     }
 
-    @PostMapping("/{id}/view")
-    public ResponseEntity<Void> incrementView(@PathVariable Long id) {
-        try {
-            roomService.incrementViewCount(id);
-        } catch (Exception ignored) {}
-        return ResponseEntity.ok().build();
-    }
-
     @PatchMapping("/{id}/active")
     public ResponseEntity<ApiResponse<RoomResponse>> toggleActive(
             @PathVariable Long id,

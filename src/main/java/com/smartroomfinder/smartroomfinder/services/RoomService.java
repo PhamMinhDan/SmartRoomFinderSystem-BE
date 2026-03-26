@@ -94,10 +94,12 @@ public class RoomService {
     }
 
     // ── Read ──────────────────────────────────────────────────────
-    @Transactional(readOnly = true)
+    @Transactional
     public RoomResponse getRoomById(Long roomId) {
         Rooms room = roomRepository.findByIdWithDetails(roomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+        int current = room.getViewCount() != null ? room.getViewCount() : 0;
+        room.setViewCount(current + 1);
         return roomMapper.toResponse(room);
     }
 
@@ -197,15 +199,6 @@ public class RoomService {
         log.info("Room soft-deleted - roomId: {}", roomId);
     }
 
-    // ── Increment view count (public, fire-and-forget) ────────────
-    @Transactional
-    public void incrementViewCount(Long roomId) {
-        roomRepository.findById(roomId).ifPresent(room -> {
-            int current = room.getViewCount() != null ? room.getViewCount() : 0;
-            room.setViewCount(current + 1);
-            roomRepository.save(room);
-        });
-    }
 
     // ── Toggle isActive (ẩn/hiện tin) ─────────────────────────────
     @Transactional
