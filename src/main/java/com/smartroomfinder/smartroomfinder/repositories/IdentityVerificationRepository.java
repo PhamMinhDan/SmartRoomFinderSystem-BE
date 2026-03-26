@@ -2,6 +2,8 @@ package com.smartroomfinder.smartroomfinder.repositories;
 
 import com.smartroomfinder.smartroomfinder.entities.IdentityVerification;
 import com.smartroomfinder.smartroomfinder.entities.Users;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -17,4 +19,6 @@ public interface IdentityVerificationRepository extends JpaRepository<IdentityVe
     Optional<IdentityVerification> findByUserAndStatus(Users user, String status);
 
     long countByStatus(String status);
+
+    Page<IdentityVerification> findByStatus(String status, Pageable pageable);
 }

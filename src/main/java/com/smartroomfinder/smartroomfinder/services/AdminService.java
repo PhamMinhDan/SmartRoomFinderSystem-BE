@@ -25,6 +25,9 @@ public class AdminService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final IdentityVerificationMapper verificationMapper;
+    private final NotificationService notificationService;
+
+    private static final String FRONTEND_BASE = "http://localhost:4200";
 
     // ── Lấy danh sách phòng chờ duyệt ────────────────────────────
     @Transactional(readOnly = true)
@@ -55,11 +58,32 @@ public class AdminService {
         return toAdminRoomResponse(room);
     }
 
-    // ── Duyệt phòng ───────────────────────────────────────────────
+    // ── Lấy danh sách yêu cầu xác thực (có filter theo status) ──
+    @Transactional(readOnly = true)
+    public Page<IdentityVerificationResponse> getVerifications(String status, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<IdentityVerification> verifications;
+        if (status != null && !status.isBlank()) {
+            verifications = verificationRepository.findByStatus(status, pageable);
+        } else {
+            verifications = verificationRepository.findAll(pageable);
+        }
+        return verifications.map(verificationMapper::toResponse);
+    }
+
+    // ── Duyệt phòng (kiểm tra landlord đã xác thực chưa) ─────────
     @Transactional
     public AdminRoomResponse approveRoom(Long roomId) {
         Rooms room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+
+        Users landlord = room.getLandlord();
+
+        // ⚠️ Kiểm tra landlord đã xác thực danh tính chưa
+        if (!Boolean.TRUE.equals(landlord.getIdentityVerified())) {
+            throw new IllegalStateException(
+                    "LANDLORD_NOT_VERIFIED: Người đăng chưa xác thực danh tính. Vui lòng duyệt xác thực trước.");
+        }
 
         room.setIsApproved(true);
         room.setIsVerified(true);
@@ -67,10 +91,32 @@ public class AdminService {
         roomRepository.save(room);
 
         log.info("Room approved by admin - roomId: {}", roomId);
+
+        // ── Notify + Email landlord ────────────────────────────────
+        String roomUrl = FRONTEND_BASE + "/rooms/" + roomId;
+        notificationService.createNotification(
+                landlord.getUserId(),
+                "Tin đăng đã được duyệt ",
+                "Tin đăng \"" + room.getTitle() + "\" của bạn đã được admin phê duyệt và hiển thị trên hệ thống.",
+                roomUrl
+        );
+
+        notificationService.sendEmail(
+                landlord.getEmail(),
+                "[SmartRoomFinder] Tin đăng của bạn đã được duyệt",
+                "Xin chào " + landlord.getFullName() + ",\n\n"
+                        + "Tin đăng của bạn đã được admin phê duyệt thành công!\n\n"
+                        + "📌 Tiêu đề: " + room.getTitle() + "\n"
+                        + "📍 Địa chỉ: " + room.getAddress() + ", " + room.getDistrictName() + ", " + room.getCityName() + "\n"
+                        + "💰 Giá: " + room.getPricePerMonth() + " đ/tháng\n\n"
+                        + "Xem tin đăng của bạn tại:\n" + roomUrl + "\n\n"
+                        + "Trân trọng,\nSmartRoomFinder"
+        );
+
         return toAdminRoomResponse(room);
     }
 
-    // ── Từ chối / ẩn phòng ────────────────────────────────────────
+    // ── Từ chối / ẩn phòng → notify + email landlord ─────────────
     @Transactional
     public AdminRoomResponse rejectRoom(Long roomId, String reason) {
         Rooms room = roomRepository.findById(roomId)
@@ -81,6 +127,29 @@ public class AdminService {
         roomRepository.save(room);
 
         log.info("Room rejected by admin - roomId: {}, reason: {}", roomId, reason);
+
+        Users landlord = room.getLandlord();
+        String rejectReason = (reason != null && !reason.isBlank()) ? reason : "Không đạt yêu cầu kiểm duyệt";
+
+        notificationService.createNotification(
+                landlord.getUserId(),
+                "Tin đăng bị từ chối ",
+                "Tin đăng \"" + room.getTitle() + "\" đã bị từ chối. Lý do: " + rejectReason,
+                FRONTEND_BASE + "/my-posts"
+        );
+
+        notificationService.sendEmail(
+                landlord.getEmail(),
+                "[SmartRoomFinder] Tin đăng của bạn bị từ chối",
+                "Xin chào " + landlord.getFullName() + ",\n\n"
+                        + "Rất tiếc, tin đăng của bạn đã bị từ chối kiểm duyệt.\n\n"
+                        + "📌 Tiêu đề: " + room.getTitle() + "\n"
+                        + " Lý do: " + rejectReason + "\n\n"
+                        + "Vui lòng chỉnh sửa và đăng lại:\n"
+                        + FRONTEND_BASE + "/post-room\n\n"
+                        + "Trân trọng,\nSmartRoomFinder"
+        );
+
         return toAdminRoomResponse(room);
     }
 
@@ -109,6 +178,24 @@ public class AdminService {
         verificationRepository.save(iv);
 
         log.info("Verification approved - userId: {} promoted to LANDLORD", user.getUserId());
+
+        notificationService.createNotification(
+                user.getUserId(),
+                "Xác thực danh tính thành công ",
+                "Tài khoản của bạn đã được xác minh. Bạn có thể đăng tin cho thuê phòng ngay bây giờ!",
+                FRONTEND_BASE + "/post-room"
+        );
+
+        notificationService.sendEmail(
+                user.getEmail(),
+                "[SmartRoomFinder] Xác thực danh tính thành công",
+                "Xin chào " + user.getFullName() + ",\n\n"
+                        + "Chúc mừng! Tài khoản của bạn đã được xác minh danh tính thành công.\n"
+                        + "Bạn đã được nâng lên cấp độ Chủ nhà (LANDLORD).\n\n"
+                        + "Đăng tin ngay tại: " + FRONTEND_BASE + "/post-room\n\n"
+                        + "Trân trọng,\nSmartRoomFinder"
+        );
+
         return verificationMapper.toResponse(iv);
     }
 
@@ -124,17 +211,37 @@ public class AdminService {
         verificationRepository.save(iv);
 
         log.info("Verification rejected - verificationId: {}", verificationId);
+
+        Users user = iv.getUser();
+
+        notificationService.createNotification(
+                user.getUserId(),
+                "Xác thực danh tính bị từ chối ",
+                "Yêu cầu xác thực bị từ chối. Lý do: " + reason + ". Vui lòng thử lại.",
+                FRONTEND_BASE + "/verify-identity"
+        );
+
+        notificationService.sendEmail(
+                user.getEmail(),
+                "[SmartRoomFinder] Yêu cầu xác thực danh tính bị từ chối",
+                "Xin chào " + user.getFullName() + ",\n\n"
+                        + "Yêu cầu xác thực danh tính của bạn bị từ chối.\n"
+                        + "Lý do: " + reason + "\n\n"
+                        + "Vui lòng thử lại tại: " + FRONTEND_BASE + "/verify-identity\n\n"
+                        + "Trân trọng,\nSmartRoomFinder"
+        );
+
         return verificationMapper.toResponse(iv);
     }
 
     // ── Stats tổng quan ───────────────────────────────────────────
     @Transactional(readOnly = true)
     public AdminStats getStats() {
-        long totalRooms     = roomRepository.count();
-        long pendingRooms   = roomRepository.countByIsApprovedFalseAndIsActiveTrue();
-        long approvedRooms  = roomRepository.countByIsApprovedTrueAndIsActiveTrue();
-        long pendingVerifs  = verificationRepository.countByStatus("pending");
-        long totalUsers     = userRepository.count();
+        long totalRooms    = roomRepository.count();
+        long pendingRooms  = roomRepository.countByIsApprovedFalseAndIsActiveTrue();
+        long approvedRooms = roomRepository.countByIsApprovedTrueAndIsActiveTrue();
+        long pendingVerifs = verificationRepository.countByStatus("pending");
+        long totalUsers    = userRepository.count();
 
         return new AdminStats(totalRooms, pendingRooms, approvedRooms, pendingVerifs, totalUsers);
     }
@@ -143,13 +250,8 @@ public class AdminService {
     private AdminRoomResponse toAdminRoomResponse(Rooms room) {
         Users landlord = room.getLandlord();
 
-        // Check pending verification của landlord
         AdminRoomResponse.PendingVerification pendingVerif = null;
         if (!Boolean.TRUE.equals(landlord.getIdentityVerified())) {
-            verificationRepository.findByUserAndStatus(landlord, "pending")
-                    .ifPresent(iv -> {
-                        // assigned below
-                    });
             var ivOpt = verificationRepository.findByUserAndStatus(landlord, "pending");
             if (ivOpt.isPresent()) {
                 IdentityVerification iv = ivOpt.get();
@@ -199,7 +301,6 @@ public class AdminService {
                 .build();
     }
 
-    // ── Inner record cho stats ────────────────────────────────────
     public record AdminStats(
             long totalRooms,
             long pendingRooms,

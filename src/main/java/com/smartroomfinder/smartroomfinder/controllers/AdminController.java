@@ -121,6 +121,22 @@ public class AdminController {
         }
     }
 
+    // ── GET /api/admin/verifications?status=pending ───────────────
+    @GetMapping("/verifications")
+    public ResponseEntity<ApiResponse<Page<IdentityVerificationResponse>>> getVerifications(
+            @RequestParam(defaultValue = "pending") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+        try {
+            requireAdmin();
+            return ResponseEntity.ok(ApiResponse.success(
+                    adminService.getVerifications(status, page, size), "OK"));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(e.getMessage(), "FORBIDDEN"));
+        }
+    }
+
     // ── PATCH /api/admin/verifications/{id}/approve ───────────────
     @PatchMapping("/verifications/{id}/approve")
     public ResponseEntity<ApiResponse<IdentityVerificationResponse>> approveVerification(

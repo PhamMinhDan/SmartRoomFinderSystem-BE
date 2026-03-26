@@ -28,9 +28,11 @@ public class IdentityVerificationService {
     private final AmenityRepository amenityRepository;
     private final IdentityVerificationMapper mapper;
     private final AmenityMapper amenityMapper;
+    private final NotificationService notificationService;   // ← inject
 
+    private static final String ADMIN_URL = "http://localhost:4200/admin/pending-posts";
 
-    // ── Submit verification ───────────────────────────────────────
+    // ── Submit verification → notify + email admin ────────────────
     @Transactional
     public IdentityVerificationResponse submitVerification(
             IdentityVerificationRequest req, UUID userId) {
@@ -38,7 +40,7 @@ public class IdentityVerificationService {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        if (user.getIdentityVerified()) {
+        if (Boolean.TRUE.equals(user.getIdentityVerified())) {
             throw new IllegalStateException("Tài khoản đã được xác minh danh tính");
         }
 
@@ -63,6 +65,26 @@ public class IdentityVerificationService {
 
         IdentityVerification saved = verificationRepository.save(iv);
         log.info("Identity verification submitted - userId: {}", userId);
+
+        // ── Notify + Email tất cả admin ───────────────────────────
+        String userName = user.getFullName() != null ? user.getFullName() : user.getEmail();
+        String notiTitle = "Yêu cầu xác thực danh tính mới";
+        String notiContent = userName + " vừa gửi yêu cầu xác thực danh tính. Vui lòng kiểm duyệt.";
+        String adminVerifyUrl = "http://localhost:4200/admin/pending-posts"; // tab verifications nếu có
+
+        notificationService.notifyAllAdmins(notiTitle, notiContent, adminVerifyUrl, "VERIFICATION");
+
+        notificationService.sendEmailToAllAdmins(
+                "[SmartRoomFinder] Yêu cầu xác thực danh tính mới",
+                "Xin chào Admin,\n\n"
+                        + userName + " (" + user.getEmail() + ") vừa gửi yêu cầu xác thực danh tính.\n"
+                        + "Loại giấy tờ: " + req.getDocumentType() + "\n"
+                        + "SĐT: " + req.getPhoneNumber() + "\n\n"
+                        + "Truy cập trang quản trị để kiểm duyệt:\n"
+                        + adminVerifyUrl + "\n\n"
+                        + "Trân trọng,\nSmartRoomFinder System"
+        );
+
         return mapper.toResponse(saved);
     }
 
@@ -77,7 +99,7 @@ public class IdentityVerificationService {
                 .orElse(null);
     }
 
-    // ── Admin: Approve → mark verified + promote LANDLORD ─────────
+    // ── Admin: Approve → notify + email user ──────────────────────
     @Transactional
     public IdentityVerificationResponse approveVerification(Long verificationId) {
         IdentityVerification iv = verificationRepository.findById(verificationId)
@@ -102,10 +124,29 @@ public class IdentityVerificationService {
         verificationRepository.save(iv);
 
         log.info("Identity approved - userId: {}, promoted to LANDLORD", user.getUserId());
+
+        // ── Notify + Email user ────────────────────────────────────
+        notificationService.createNotification(
+                user.getUserId(),
+                "Xác thực danh tính thành công ",
+                "Tài khoản của bạn đã được xác minh danh tính. Bạn có thể đăng tin cho thuê phòng ngay bây giờ!",
+                "http://localhost:4200/post-room"
+        );
+
+        notificationService.sendEmail(
+                user.getEmail(),
+                "[SmartRoomFinder] Xác thực danh tính thành công",
+                "Xin chào " + user.getFullName() + ",\n\n"
+                        + "Chúc mừng! Tài khoản của bạn đã được xác minh danh tính thành công.\n"
+                        + "Bạn đã được nâng lên cấp độ Chủ nhà (LANDLORD) và có thể đăng tin cho thuê phòng.\n\n"
+                        + "Truy cập ngay: http://localhost:4200/post-room\n\n"
+                        + "Trân trọng,\nSmartRoomFinder"
+        );
+
         return mapper.toResponse(iv);
     }
 
-    // ── Admin: Reject ─────────────────────────────────────────────
+    // ── Admin: Reject → notify + email user ──────────────────────
     @Transactional
     public IdentityVerificationResponse rejectVerification(Long verificationId, String reason) {
         IdentityVerification iv = verificationRepository.findById(verificationId)
@@ -117,6 +158,28 @@ public class IdentityVerificationService {
         verificationRepository.save(iv);
 
         log.info("Identity rejected - verificationId: {}", verificationId);
+
+        Users user = iv.getUser();
+
+        // ── Notify + Email user ────────────────────────────────────
+        notificationService.createNotification(
+                user.getUserId(),
+                "Xác thực danh tính bị từ chối ",
+                "Yêu cầu xác thực của bạn đã bị từ chối. Lý do: " + reason + ". Vui lòng thử lại.",
+                "http://localhost:4200/verify-identity"
+        );
+
+        notificationService.sendEmail(
+                user.getEmail(),
+                "[SmartRoomFinder] Yêu cầu xác thực danh tính bị từ chối",
+                "Xin chào " + user.getFullName() + ",\n\n"
+                        + "Yêu cầu xác thực danh tính của bạn đã bị từ chối.\n"
+                        + "Lý do: " + reason + "\n\n"
+                        + "Vui lòng kiểm tra lại hồ sơ và gửi lại yêu cầu:\n"
+                        + "http://localhost:4200/verify-identity\n\n"
+                        + "Trân trọng,\nSmartRoomFinder"
+        );
+
         return mapper.toResponse(iv);
     }
 
@@ -144,7 +207,6 @@ public class IdentityVerificationService {
                 .toList();
     }
 
-    // ── Lấy tiện ích đang active ────────────────────
     public List<AmenityResponse> getActive() {
         return amenityRepository.findByIsActiveTrue()
                 .stream()
@@ -152,47 +214,30 @@ public class IdentityVerificationService {
                 .toList();
     }
 
-    // ── Lấy theo id ─────────────────────────────────
     public AmenityResponse getById(Long id) {
         Amenities amenity = amenityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Amenity not found"));
-
         return amenityMapper.toResponse(amenity);
     }
 
-    // ── Tạo tiện ích mới ────────────────────────────
     public AmenityResponse create(AmenityRequest request) {
-
         if (amenityRepository.existsByAmenityNameIgnoreCase(request.getAmenityName())) {
             throw new RuntimeException("Amenity already exists");
         }
-
         Amenities entity = amenityMapper.toEntity(request);
-
-        Amenities saved = amenityRepository.save(entity);
-
-        return amenityMapper.toResponse(saved);
+        return amenityMapper.toResponse(amenityRepository.save(entity));
     }
 
-    // ── Update tiện ích ─────────────────────────────
     public AmenityResponse update(Long id, AmenityRequest request) {
-
         Amenities amenity = amenityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Amenity not found"));
-
         amenityMapper.updateEntity(amenity, request);
-
-        Amenities updated = amenityRepository.save(amenity);
-
-        return amenityMapper.toResponse(updated);
+        return amenityMapper.toResponse(amenityRepository.save(amenity));
     }
 
-    // ── Xóa tiện ích ────────────────────────────────
     public void delete(Long id) {
-
         Amenities amenity = amenityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Amenity not found"));
-
         amenityRepository.delete(amenity);
     }
 }
