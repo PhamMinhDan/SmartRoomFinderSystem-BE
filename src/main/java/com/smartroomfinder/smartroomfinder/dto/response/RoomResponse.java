@@ -19,13 +19,7 @@ public class RoomResponse {
     private String title;
     private String description;
 
-    // Address
-    private String address;
-    private String cityName;
-    private String districtName;
-    private String wardName;
-    private BigDecimal latitude;
-    private BigDecimal longitude;
+    private RoomAddressResponse address;
 
     // Details
     private BigDecimal areaSize;
@@ -61,5 +55,4 @@ public class RoomResponse {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
 }

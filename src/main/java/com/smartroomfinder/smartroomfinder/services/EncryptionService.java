@@ -5,31 +5,74 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Base64;
+
 
 @Slf4j
 @Service
 public class EncryptionService {
 
-    // Giữ nguyên key 16 ký tự giống code gốc để tương thích dữ liệu cũ
-    @Value("${app.encryption.key:1234567890123456}")
-    private String secretKey;
+    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
+    private static final int    IV_SIZE   = 16; // 128-bit IV
+    private static final int    KEY_SIZE  = 32; // 256-bit key
 
-    public String encrypt(String plainText) throws Exception {
-        SecretKeySpec keySpec = buildKey();
-        Cipher cipher = Cipher.getInstance("AES");
-        cipher.init(Cipher.ENCRYPT_MODE, keySpec);
-        byte[] encrypted = cipher.doFinal(plainText.getBytes("UTF-8"));
-        return Base64.getEncoder().encodeToString(encrypted);
+    private final byte[] keyBytes;
+
+    public EncryptionService(@Value("${app.encryption.key}") String secretKey) {
+        byte[] raw = secretKey.getBytes(StandardCharsets.UTF_8);
+        if (raw.length != KEY_SIZE) {
+            throw new IllegalStateException(
+                    "app.encryption.key phải đúng 32 ký tự UTF-8 (AES-256). " +
+                            "Hiện tại: " + raw.length + " ký tự."
+            );
+        }
+        this.keyBytes = raw;
     }
 
-    public String decrypt(String encryptedBase64) throws Exception {
-        SecretKeySpec keySpec = buildKey();
-        Cipher cipher = Cipher.getInstance("AES");
-        cipher.init(Cipher.DECRYPT_MODE, keySpec);
-        byte[] decoded = Base64.getDecoder().decode(encryptedBase64);
-        return new String(cipher.doFinal(decoded), "UTF-8");
+    public String encrypt(String plainText) throws Exception {
+        if (plainText == null || plainText.isEmpty()) return plainText;
+
+        byte[] iv = new byte[IV_SIZE];
+        new SecureRandom().nextBytes(iv);
+
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.ENCRYPT_MODE,
+                new SecretKeySpec(keyBytes, "AES"),
+                new IvParameterSpec(iv));
+
+        byte[] cipherBytes = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+
+        byte[] combined = new byte[IV_SIZE + cipherBytes.length];
+        System.arraycopy(iv,          0, combined, 0,       IV_SIZE);
+        System.arraycopy(cipherBytes, 0, combined, IV_SIZE, cipherBytes.length);
+
+        return Base64.getEncoder().encodeToString(combined);
+    }
+
+    public String decrypt(String cipherBase64) throws Exception {
+        if (cipherBase64 == null || cipherBase64.isEmpty()) return cipherBase64;
+
+        byte[] combined = Base64.getDecoder().decode(cipherBase64);
+
+        if (combined.length <= IV_SIZE) {
+            throw new IllegalArgumentException("Dữ liệu mã hóa quá ngắn.");
+        }
+
+        byte[] iv          = new byte[IV_SIZE];
+        byte[] cipherBytes = new byte[combined.length - IV_SIZE];
+        System.arraycopy(combined, 0,       iv,          0, IV_SIZE);
+        System.arraycopy(combined, IV_SIZE, cipherBytes, 0, cipherBytes.length);
+
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE,
+                new SecretKeySpec(keyBytes, "AES"),
+                new IvParameterSpec(iv));
+
+        return new String(cipher.doFinal(cipherBytes), StandardCharsets.UTF_8);
     }
 
     public String safeDecrypt(String input) {
@@ -37,15 +80,9 @@ public class EncryptionService {
         try {
             return decrypt(input);
         } catch (Exception e) {
-            // Không decrypt được → coi như plaintext (dữ liệu cũ chưa mã hóa)
-            log.debug("Cannot decrypt, treating as plaintext: {}", input.substring(0, Math.min(20, input.length())));
+            log.debug("safeDecrypt: không giải mã được, trả về plaintext. prefix='{}'",
+                    input.substring(0, Math.min(20, input.length())));
             return input;
         }
-    }
-
-    private SecretKeySpec buildKey() throws Exception {
-        // Đảm bảo key đúng 16 bytes
-        byte[] keyBytes = secretKey.substring(0, 16).getBytes("UTF-8");
-        return new SecretKeySpec(keyBytes, "AES");
     }
 }

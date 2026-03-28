@@ -2,37 +2,24 @@ package com.smartroomfinder.smartroomfinder.mappers;
 
 import com.smartroomfinder.smartroomfinder.dto.response.IdentityVerificationResponse;
 import com.smartroomfinder.smartroomfinder.entities.IdentityVerification;
-import com.smartroomfinder.smartroomfinder.entities.Users;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.Named;
 
-@Component
-public class IdentityVerificationMapper {
+@Mapper(componentModel = "spring")
+public interface IdentityVerificationMapper {
 
-    public IdentityVerificationResponse toResponse(IdentityVerification iv) {
-        if (iv == null) return null;
+    @Mapping(target = "userId", source = "user", qualifiedByName = "mapUserId")
+    @Mapping(target = "fullName", source = "user.fullName")
+    @Mapping(target = "avatarUrl", source = "user.avatarUrl")
+    @Mapping(target = "email", source = "user.email")
+    IdentityVerificationResponse toResponse(IdentityVerification iv);
 
-        Users user = iv.getUser();
-        Long userId = null;
-        if (user != null && user.getUserId() != null) {
-            userId = user.getUserId().getLeastSignificantBits()
-                    ^ user.getUserId().getMostSignificantBits();
-        }
+    @Named("mapUserId")
+    default Long mapUserId(com.smartroomfinder.smartroomfinder.entities.Users user) {
+        if (user == null || user.getUserId() == null) return null;
 
-        return IdentityVerificationResponse.builder()
-                .verificationId(iv.getVerificationId())
-                .userId(userId)
-                .fullName(user.getFullName())
-                .avatarUrl(user.getAvatarUrl())
-                .email(user.getEmail())
-                .phoneNumber(iv.getPhoneNumber())
-                .documentType(iv.getDocumentType())
-                .frontImageUrl(iv.getFrontImageUrl())
-                .backImageUrl(iv.getBackImageUrl())
-                .selfieImageUrl(iv.getSelfieImageUrl())
-                .status(iv.getStatus())
-                .rejectReason(iv.getRejectReason())
-                .createdAt(iv.getCreatedAt())
-                .reviewedAt(iv.getReviewedAt())
-                .build();
+        return user.getUserId().getLeastSignificantBits()
+                ^ user.getUserId().getMostSignificantBits();
     }
 }
