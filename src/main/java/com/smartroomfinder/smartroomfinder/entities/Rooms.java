@@ -8,22 +8,18 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity
 @Table(
         name = "rooms",
         indexes = {
-                @Index(name = "idx_landlord_id", columnList = "landlord_id"),
-                @Index(name = "idx_city", columnList = "city_name"),
-                @Index(name = "idx_district", columnList = "district_name"),
-                @Index(name = "idx_price", columnList = "price_per_month"),
-                @Index(name = "idx_availability", columnList = "availability_status"),
-                @Index(name = "idx_is_approved", columnList = "is_approved"),
-                @Index(name = "idx_created_at", columnList = "created_at")
+                @Index(name = "idx_landlord_id",   columnList = "landlord_id"),
+                @Index(name = "idx_price",          columnList = "price_per_month"),
+                @Index(name = "idx_availability",   columnList = "availability_status"),
+                @Index(name = "idx_is_approved",    columnList = "is_approved"),
+                @Index(name = "idx_created_at",     columnList = "created_at")
         }
 )
 @Getter @Setter
@@ -46,24 +42,9 @@ public class Rooms {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    // ── Address ──────────────────────────────────────────────────
-    @Column(name = "address", nullable = false, length = 500)
-    private String address;
-
-    @Column(name = "city_name", nullable = false, length = 100)
-    private String cityName;
-
-    @Column(name = "district_name", nullable = false, length = 100)
-    private String districtName;
-
-    @Column(name = "ward_name", nullable = false, length = 100)
-    private String wardName;
-
-    @Column(name = "latitude", precision = 10, scale = 8)
-    private BigDecimal latitude;
-
-    @Column(name = "longitude", precision = 11, scale = 8)
-    private BigDecimal longitude;
+    @OneToOne(mappedBy = "room", cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY, orphanRemoval = true)
+    private RoomAddresses roomAddress;
 
     // ── Room details ──────────────────────────────────────────────
     @Column(name = "area_size", precision = 8, scale = 2)
@@ -80,7 +61,7 @@ public class Rooms {
     private Integer capacity = 1;
 
     @Column(name = "room_type", length = 50)
-    private String roomType; // single, double, shared, etc.
+    private String roomType;
 
     @Column(name = "furnish_level", length = 50)
     private String furnishLevel;
@@ -133,7 +114,6 @@ public class Rooms {
 
     @Column(name = "hidden_at")
     private LocalDateTime hiddenAt;
-
 
     // ── Relations ─────────────────────────────────────────────────
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)

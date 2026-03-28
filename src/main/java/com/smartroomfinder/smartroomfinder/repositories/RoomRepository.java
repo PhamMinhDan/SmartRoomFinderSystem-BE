@@ -10,7 +10,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,79 +19,74 @@ public interface RoomRepository extends JpaRepository<Rooms, Long> {
     Page<Rooms> findByLandlordAndIsActiveTrue(Users landlord, Pageable pageable);
 
     @Query("""
-SELECT DISTINCT r FROM Rooms r
-LEFT JOIN FETCH r.images
-LEFT JOIN FETCH r.amenities ra
-LEFT JOIN FETCH ra.amenity
-WHERE r.roomId = :roomId 
-""")
+        SELECT DISTINCT r FROM Rooms r
+        LEFT JOIN FETCH r.roomAddress
+        LEFT JOIN FETCH r.images
+        LEFT JOIN FETCH r.amenities ra
+        LEFT JOIN FETCH ra.amenity
+        WHERE r.roomId = :roomId
+    """)
     Optional<Rooms> findByIdWithDetails(@Param("roomId") Long roomId);
 
     @Query("""
-    SELECT r FROM Rooms r
-    WHERE r.isApproved = true
-    AND r.isActive = true
-    AND (r.displayUntil IS NULL OR r.displayUntil > CURRENT_TIMESTAMP)
-    AND (:city IS NULL OR r.cityName = :city)
-    AND (:district IS NULL OR r.districtName = :district)
-    ORDER BY r.createdAt DESC
-""")
+        SELECT DISTINCT r FROM Rooms r
+        JOIN r.roomAddress addr
+        WHERE r.isApproved = true
+          AND r.isActive   = true
+          AND (r.displayUntil IS NULL OR r.displayUntil > CURRENT_TIMESTAMP)
+          AND (:city     IS NULL OR addr.cityName     = :city)
+          AND (:district IS NULL OR addr.districtName = :district)
+        ORDER BY r.createdAt DESC
+    """)
     Page<Rooms> findApprovedRooms(
-            @Param("city") String city,
+            @Param("city")     String city,
             @Param("district") String district,
             Pageable pageable
     );
 
+    /** Phòng nổi bật */
     @Query("""
-SELECT r FROM Rooms r
-WHERE r.isApproved = true
-AND r.isActive = true
-AND r.availabilityStatus = 'available'
-
-AND (
-    r.viewCount > 100
-    OR r.averageRating >= 4.5
-)
-
-ORDER BY 
-    r.averageRating DESC,
-    r.viewCount DESC,
-    r.totalReviews DESC,
-    r.createdAt DESC
-""")
+        SELECT r FROM Rooms r
+        WHERE r.isApproved          = true
+          AND r.isActive            = true
+          AND r.availabilityStatus  = 'available'
+          AND (r.viewCount > 100 OR r.averageRating >= 4.5)
+        ORDER BY r.averageRating DESC, r.viewCount DESC,
+                 r.totalReviews DESC, r.createdAt DESC
+    """)
     Page<Rooms> findFeaturedRooms(Pageable pageable);
 
     @Query("""
-SELECT DISTINCT r FROM Rooms r
-LEFT JOIN r.amenities ra
-LEFT JOIN ra.amenity a
-WHERE r.isApproved = true
-AND r.isActive = true
-AND r.displayUntil > CURRENT_TIMESTAMP
+        SELECT DISTINCT r FROM Rooms r
+        JOIN  r.roomAddress addr
+        LEFT JOIN r.amenities ra
+        LEFT JOIN ra.amenity  a
+        WHERE r.isApproved = true
+          AND r.isActive   = true
+          AND r.displayUntil > CURRENT_TIMESTAMP
 
-AND (:city IS NULL OR r.cityName = :city)
-AND (:district IS NULL OR r.districtName = :district)
-AND (:roomType IS NULL OR r.roomType = :roomType)
+          AND (:city      IS NULL OR addr.cityName     = :city)
+          AND (:district  IS NULL OR addr.districtName = :district)
+          AND (:roomType  IS NULL OR r.roomType        = :roomType)
 
-AND (:priceMin IS NULL OR r.pricePerMonth >= :priceMin)
-AND (:priceMax IS NULL OR r.pricePerMonth <= :priceMax)
+          AND (:priceMin  IS NULL OR r.pricePerMonth  >= :priceMin)
+          AND (:priceMax  IS NULL OR r.pricePerMonth  <= :priceMax)
 
-AND (:areaMin IS NULL OR r.areaSize >= :areaMin)
-AND (:areaMax IS NULL OR r.areaSize <= :areaMax)
+          AND (:areaMin   IS NULL OR r.areaSize       >= :areaMin)
+          AND (:areaMax   IS NULL OR r.areaSize       <= :areaMax)
 
-AND (:minRating IS NULL OR r.averageRating >= :minRating)
+          AND (:minRating IS NULL OR r.averageRating  >= :minRating)
 
-AND (:amenities IS NULL OR a.amenityName IN :amenities)
-
-""")
+          AND (:amenities IS NULL OR a.amenityName IN :amenities)
+    """)
     Page<Rooms> searchRooms(
-            @Param("city") String city,
-            @Param("district") String district,
-            @Param("roomType") String roomType,
-            @Param("priceMin") BigDecimal priceMin,
-            @Param("priceMax") BigDecimal priceMax,
-            @Param("areaMin") BigDecimal areaMin,
-            @Param("areaMax") BigDecimal areaMax,
+            @Param("city")      String city,
+            @Param("district")  String district,
+            @Param("roomType")  String roomType,
+            @Param("priceMin")  BigDecimal priceMin,
+            @Param("priceMax")  BigDecimal priceMax,
+            @Param("areaMin")   BigDecimal areaMin,
+            @Param("areaMax")   BigDecimal areaMax,
             @Param("minRating") Double minRating,
             @Param("amenities") List<String> amenities,
             Pageable pageable
@@ -100,16 +94,10 @@ AND (:amenities IS NULL OR a.amenityName IN :amenities)
 
     // ── Admin queries ─────────────────────────────────────────────
     Page<Rooms> findByIsApprovedFalseAndIsActiveTrue(Pageable pageable);
-
     Page<Rooms> findByIsApprovedAndIsActiveTrue(Boolean isApproved, Pageable pageable);
-
     Page<Rooms> findByIsActiveTrue(Pageable pageable);
-
     long countByIsApprovedFalseAndIsActiveTrue();
-
     long countByIsApprovedTrueAndIsActiveTrue();
-
     Page<Rooms> findByLandlord(Users landlord, Pageable pageable);
-
     long countByLandlord(Users landlord);
 }

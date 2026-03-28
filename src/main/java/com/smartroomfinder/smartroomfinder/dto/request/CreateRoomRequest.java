@@ -26,9 +26,8 @@ public class CreateRoomRequest {
     )
     private String roomType;
 
-    // ── Address ──────────────────────────────────────────────────
     @NotBlank(message = "Địa chỉ không được để trống")
-    private String address;
+    private String streetAddress;
 
     @NotBlank(message = "Tỉnh/Thành phố không được để trống")
     private String cityName;
@@ -56,6 +55,7 @@ public class CreateRoomRequest {
     @Min(value = 1, message = "Số người tối thiểu là 1")
     @Max(value = 5, message = "Số người tối đa là 5")
     private Integer capacity;
+
     private String furnishLevel;
     private LocalDate availableFrom;
 
@@ -64,6 +64,5 @@ public class CreateRoomRequest {
 
     // ── Amenities ─────────────────────────────────────────────────
     private List<Long> amenityIds;
-
     private List<String> customAmenities;
 }

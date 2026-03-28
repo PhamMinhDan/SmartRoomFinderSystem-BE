@@ -33,20 +33,17 @@ public class AdminService {
     @Transactional(readOnly = true)
     public Page<AdminRoomResponse> getPendingRooms(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<Rooms> rooms = roomRepository.findByIsApprovedFalseAndIsActiveTrue(pageable);
-        return rooms.map(this::toAdminRoomResponse);
+        return roomRepository.findByIsApprovedFalseAndIsActiveTrue(pageable)
+                .map(this::toAdminRoomResponse);
     }
 
     // ── Lấy tất cả phòng (có filter) ─────────────────────────────
     @Transactional(readOnly = true)
     public Page<AdminRoomResponse> getAllRooms(Boolean isApproved, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<Rooms> rooms;
-        if (isApproved != null) {
-            rooms = roomRepository.findByIsApprovedAndIsActiveTrue(isApproved, pageable);
-        } else {
-            rooms = roomRepository.findByIsActiveTrue(pageable);
-        }
+        Page<Rooms> rooms = isApproved != null
+                ? roomRepository.findByIsApprovedAndIsActiveTrue(isApproved, pageable)
+                : roomRepository.findByIsActiveTrue(pageable);
         return rooms.map(this::toAdminRoomResponse);
     }
 
@@ -58,28 +55,24 @@ public class AdminService {
         return toAdminRoomResponse(room);
     }
 
-    // ── Lấy danh sách yêu cầu xác thực (có filter theo status) ──
+    // ── Lấy danh sách yêu cầu xác thực ───────────────────────────
     @Transactional(readOnly = true)
     public Page<IdentityVerificationResponse> getVerifications(String status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<IdentityVerification> verifications;
-        if (status != null && !status.isBlank()) {
-            verifications = verificationRepository.findByStatus(status, pageable);
-        } else {
-            verifications = verificationRepository.findAll(pageable);
-        }
+        Page<IdentityVerification> verifications = (status != null && !status.isBlank())
+                ? verificationRepository.findByStatus(status, pageable)
+                : verificationRepository.findAll(pageable);
         return verifications.map(verificationMapper::toResponse);
     }
 
-    // ── Duyệt phòng (kiểm tra landlord đã xác thực chưa) ─────────
+    // ── Duyệt phòng ───────────────────────────────────────────────
     @Transactional
     public AdminRoomResponse approveRoom(Long roomId) {
-        Rooms room = roomRepository.findById(roomId)
+        Rooms room = roomRepository.findByIdWithDetails(roomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
 
         Users landlord = room.getLandlord();
 
-        // ⚠️ Kiểm tra landlord đã xác thực danh tính chưa
         if (!Boolean.TRUE.equals(landlord.getIdentityVerified())) {
             throw new IllegalStateException(
                     "LANDLORD_NOT_VERIFIED: Người đăng chưa xác thực danh tính. Vui lòng duyệt xác thực trước.");
@@ -92,8 +85,14 @@ public class AdminService {
 
         log.info("Room approved by admin - roomId: {}", roomId);
 
-        // ── Notify + Email landlord ────────────────────────────────
+        // Lấy địa chỉ từ room_addresses
+        RoomAddresses addr = room.getRoomAddress();
+        String addressLine = addr != null
+                ? addr.getStreetAddress() + ", " + addr.getDistrictName() + ", " + addr.getCityName()
+                : "";
+
         String roomUrl = FRONTEND_BASE + "/rooms/" + roomId;
+
         notificationService.createNotification(
                 landlord.getUserId(),
                 "Tin đăng đã được duyệt ",
@@ -107,7 +106,7 @@ public class AdminService {
                 "Xin chào " + landlord.getFullName() + ",\n\n"
                         + "Tin đăng của bạn đã được admin phê duyệt thành công!\n\n"
                         + "📌 Tiêu đề: " + room.getTitle() + "\n"
-                        + "📍 Địa chỉ: " + room.getAddress() + ", " + room.getDistrictName() + ", " + room.getCityName() + "\n"
+                        + "📍 Địa chỉ: " + addressLine + "\n"
                         + "💰 Giá: " + room.getPricePerMonth() + " đ/tháng\n\n"
                         + "Xem tin đăng của bạn tại:\n" + roomUrl + "\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
@@ -116,7 +115,7 @@ public class AdminService {
         return toAdminRoomResponse(room);
     }
 
-    // ── Từ chối / ẩn phòng → notify + email landlord ─────────────
+    // ── Từ chối phòng ─────────────────────────────────────────────
     @Transactional
     public AdminRoomResponse rejectRoom(Long roomId, String reason) {
         Rooms room = roomRepository.findById(roomId)
@@ -144,7 +143,7 @@ public class AdminService {
                 "Xin chào " + landlord.getFullName() + ",\n\n"
                         + "Rất tiếc, tin đăng của bạn đã bị từ chối kiểm duyệt.\n\n"
                         + "📌 Tiêu đề: " + room.getTitle() + "\n"
-                        + " Lý do: " + rejectReason + "\n\n"
+                        + "❌ Lý do: " + rejectReason + "\n\n"
                         + "Vui lòng chỉnh sửa và đăng lại:\n"
                         + FRONTEND_BASE + "/post-room\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
@@ -153,7 +152,7 @@ public class AdminService {
         return toAdminRoomResponse(room);
     }
 
-    // ── Duyệt xác thực danh tính → promote LANDLORD ──────────────
+    // ── Duyệt xác thực danh tính ─────────────────────────────────
     @Transactional
     public IdentityVerificationResponse approveVerification(Long verificationId) {
         IdentityVerification iv = verificationRepository.findById(verificationId)
@@ -237,18 +236,21 @@ public class AdminService {
     // ── Stats tổng quan ───────────────────────────────────────────
     @Transactional(readOnly = true)
     public AdminStats getStats() {
-        long totalRooms    = roomRepository.count();
-        long pendingRooms  = roomRepository.countByIsApprovedFalseAndIsActiveTrue();
-        long approvedRooms = roomRepository.countByIsApprovedTrueAndIsActiveTrue();
-        long pendingVerifs = verificationRepository.countByStatus("pending");
-        long totalUsers    = userRepository.count();
-
-        return new AdminStats(totalRooms, pendingRooms, approvedRooms, pendingVerifs, totalUsers);
+        return new AdminStats(
+                roomRepository.count(),
+                roomRepository.countByIsApprovedFalseAndIsActiveTrue(),
+                roomRepository.countByIsApprovedTrueAndIsActiveTrue(),
+                verificationRepository.countByStatus("pending"),
+                userRepository.count()
+        );
     }
 
-    // ── Helper: convert Room → AdminRoomResponse ──────────────────
+    // ── Helper: Rooms → AdminRoomResponse ─────────────────────────
     private AdminRoomResponse toAdminRoomResponse(Rooms room) {
         Users landlord = room.getLandlord();
+
+        // Lấy địa chỉ từ bảng room_addresses
+        RoomAddresses addr = room.getRoomAddress();
 
         AdminRoomResponse.PendingVerification pendingVerif = null;
         if (!Boolean.TRUE.equals(landlord.getIdentityVerified())) {
@@ -278,10 +280,11 @@ public class AdminService {
                 .roomId(room.getRoomId())
                 .title(room.getTitle())
                 .description(room.getDescription())
-                .address(room.getAddress())
-                .cityName(room.getCityName())
-                .districtName(room.getDistrictName())
-                .wardName(room.getWardName())
+                // địa chỉ từ room_addresses
+                .address(addr != null ? addr.getStreetAddress() : null)
+                .cityName(addr != null ? addr.getCityName() : null)
+                .districtName(addr != null ? addr.getDistrictName() : null)
+                .wardName(addr != null ? addr.getWardName() : null)
                 .pricePerMonth(room.getPricePerMonth())
                 .depositAmount(room.getDepositAmount())
                 .areaSize(room.getAreaSize())

@@ -1,91 +1,62 @@
 package com.smartroomfinder.smartroomfinder.mappers;
 
 import com.smartroomfinder.smartroomfinder.dto.response.AmenityResponse;
+import com.smartroomfinder.smartroomfinder.dto.response.RoomAddressResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.RoomImageResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.RoomResponse;
+import com.smartroomfinder.smartroomfinder.entities.RoomAddresses;
 import com.smartroomfinder.smartroomfinder.entities.RoomAmenities;
 import com.smartroomfinder.smartroomfinder.entities.RoomImages;
 import com.smartroomfinder.smartroomfinder.entities.Rooms;
-import org.springframework.stereotype.Component;
+import org.mapstruct.*;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
-@Component
-public class RoomMapper {
+@Mapper(componentModel = "spring")
+public interface RoomMapper {
 
-    public RoomResponse toResponse(Rooms room) {
-        if (room == null) return null;
+    // ── Rooms → RoomResponse ──────────────────────────────────────
+    @Mapping(target = "address",        source = "roomAddress")
+    @Mapping(target = "landlordId",     expression = "java(room.getLandlord().getUserId() != null ? room.getLandlord().getUserId().toString() : null)")
+    @Mapping(target = "landlordName",   source = "landlord.fullName")
+    @Mapping(target = "landlordAvatar", source = "landlord.avatarUrl")
+    @Mapping(target = "phoneNumber",    source = "landlord.phoneNumber")
+    @Mapping(target = "expiredAt",      source = "displayUntil")
+    @Mapping(target = "images",         expression = "java(mapImages(room.getImages()))")
+    @Mapping(target = "amenities",      expression = "java(mapAmenities(room.getAmenities()))")
+    RoomResponse toResponse(Rooms room);
 
-        List<RoomImageResponse> images = room.getImages() == null ? List.of() :
-                room.getImages().stream()
-                        .sorted((a, b) -> Integer.compare(a.getImageOrder(), b.getImageOrder()))
-                        .map(this::toImageResponse)
-                        .toList();
+    List<RoomResponse> toResponseList(List<Rooms> rooms);
 
-        List<AmenityResponse> amenities =
-                room.getAmenities().stream()
-                        .sorted(Comparator.comparing(a -> a.getAmenity().getAmenityName()))
-                        .map(this::toAmenityResponse)
-                        .toList();
+    // ── RoomAddresses → RoomAddressResponse ──────────────────────
+    RoomAddressResponse toAddressResponse(RoomAddresses addr);
 
-        return RoomResponse.builder()
-                .roomId(room.getRoomId())
-                .title(room.getTitle())
-                .description(room.getDescription())
-                .address(room.getAddress())
-                .cityName(room.getCityName())
-                .districtName(room.getDistrictName())
-                .wardName(room.getWardName())
-                .latitude(room.getLatitude())
-                .longitude(room.getLongitude())
-                .areaSize(room.getAreaSize())
-                .pricePerMonth(room.getPricePerMonth())
-                .depositAmount(room.getDepositAmount())
-                .capacity(room.getCapacity())
-                .roomType(room.getRoomType())
-                .furnishLevel(room.getFurnishLevel())
-                .availableFrom(room.getAvailableFrom())
-                .availabilityStatus(room.getAvailabilityStatus())
-                .isVerified(room.getIsVerified())
-                .isApproved(room.getIsApproved())
-                .isActive(room.getIsActive())
-                .viewCount(room.getViewCount())
-                .averageRating(room.getAverageRating())
-                .totalReviews(room.getTotalReviews())
-                .landlordId(room.getLandlord().getUserId() != null
-                        ? room.getLandlord().getUserId().toString() : null)
-                .landlordName(room.getLandlord().getFullName())
-                .landlordAvatar(room.getLandlord().getAvatarUrl())
-                .phoneNumber(room.getLandlord().getPhoneNumber())
-                .hiddenReason(room.getHiddenReason())
-                .expiredAt(room.getDisplayUntil())
-                .images(images)
-                .amenities(amenities)
-                .createdAt(room.getCreatedAt())
-                .updatedAt(room.getUpdatedAt())
-                .build();
+    // ── RoomImages → RoomImageResponse ────────────────────────────
+    RoomImageResponse toImageResponse(RoomImages img);
+
+    // ── RoomAmenities → AmenityResponse ──────────────────────────
+    @Mapping(target = "amenityId",   source = "amenity.amenityId")
+    @Mapping(target = "amenityName", source = "amenity.amenityName")
+    @Mapping(target = "iconUrl",     source = "amenity.iconUrl")
+    @Mapping(target = "category",    source = "amenity.category")
+    AmenityResponse toAmenityResponse(RoomAmenities ra);
+
+    // ── Sort helpers (default method – MapStruct giữ nguyên) ─────
+    default List<RoomImageResponse> mapImages(Set<RoomImages> images) {
+        if (images == null) return List.of();
+        return images.stream()
+                .sorted(Comparator.comparingInt(RoomImages::getImageOrder))
+                .map(this::toImageResponse)
+                .toList();
     }
 
-    private RoomImageResponse toImageResponse(RoomImages img) {
-        return RoomImageResponse.builder()
-                .imageId(img.getImageId())
-                .imageUrl(img.getImageUrl())
-                .imageOrder(img.getImageOrder())
-                .isPrimary(img.getIsPrimary())
-                .build();
-    }
-
-    private AmenityResponse toAmenityResponse(RoomAmenities ra) {
-        return AmenityResponse.builder()
-                .amenityId(ra.getAmenity().getAmenityId())
-                .amenityName(ra.getAmenity().getAmenityName())
-                .iconUrl(ra.getAmenity().getIconUrl())
-                .category(ra.getAmenity().getCategory())
-                .build();
-    }
-
-    public List<RoomResponse> toResponseList(List<Rooms> rooms) {
-        return rooms.stream().map(this::toResponse).toList();
+    default List<AmenityResponse> mapAmenities(Set<RoomAmenities> amenities) {
+        if (amenities == null) return List.of();
+        return amenities.stream()
+                .sorted(Comparator.comparing(a -> a.getAmenity().getAmenityName()))
+                .map(this::toAmenityResponse)
+                .toList();
     }
 }

@@ -50,31 +50,20 @@ public class ChatService {
         Rooms room = roomRepo.findById(req.getRoomId())
                 .orElseThrow(() -> new RuntimeException("Room not found: " + req.getRoomId()));
 
-        // ================= 🧠 CHECK TRƯỚC KHI SAVE =================
+        // ================= CHECK NOTIFY =================
         long total = chatRepo.countConversation(req.getSenderId(), req.getReceiverId());
         LocalDateTime lastTime = chatRepo.getLastMessageTime(req.getSenderId(), req.getReceiverId());
 
         boolean shouldNotify = false;
-
-        // lần đầu
-        if (total == 0) {
-            shouldNotify = true;
-        }
-
-        // > 1 giờ
-        if (lastTime != null && lastTime.isBefore(LocalDateTime.now().minusHours(30))) {
-            shouldNotify = true;
-        }
-
-        // > 30 tin
-        if (total >= 30) {
-            shouldNotify = true;
-        }
+        if (total == 0) shouldNotify = true;
+        if (lastTime != null && lastTime.isBefore(LocalDateTime.now().minusHours(30))) shouldNotify = true;
+        if (total >= 30) shouldNotify = true;
 
         log.info("DEBUG NOTIFY → total={}, lastTime={}, shouldNotify={}", total, lastTime, shouldNotify);
 
-        // ================= SAVE MESSAGE =================
-        String encrypted = encryptionService.encrypt(req.getMessage());
+        // ================= ENCRYPT + SAVE =================
+        String plainText = req.getMessage();
+        String encrypted = encryptionService.encrypt(plainText);
 
         ChatMessage message = ChatMessage.builder()
                 .sender(sender)
@@ -86,24 +75,32 @@ public class ChatService {
 
         ChatMessage saved = chatRepo.save(message);
 
-        // ================= RESPONSE =================
-        saved.setMessageContent(req.getMessage());
-        ChatMessageResponse response = mapper.toResponse(saved);
+        ChatMessageResponse response = ChatMessageResponse.builder()
+                .messageId(saved.getMessageId())
+                .senderId(sender.getUserId())
+                .senderName(sender.getFullName())
+                .senderAvatar(sender.getAvatarUrl())
+                .receiverId(receiver.getUserId())
+                .message(plainText)
+                .isRead(false)
+                .createdAt(saved.getCreatedAt())
+                .type("MESSAGE")
+                .build();
 
-        // ================= 🔥 SOCKET CHAT =================
+        // ================= SOCKET → RECEIVER =================
         messagingTemplate.convertAndSend(
                 "/topic/chat." + req.getReceiverId(),
                 response
         );
 
-        // echo sender
+        // ================= SOCKET → SENDER (ECHO) =================
         ChatMessageResponse echo = ChatMessageResponse.builder()
                 .messageId(saved.getMessageId())
-                .senderId(response.getSenderId())
-                .senderName(response.getSenderName())
-                .senderAvatar(response.getSenderAvatar())
-                .receiverId(response.getReceiverId())
-                .message(req.getMessage())
+                .senderId(sender.getUserId())
+                .senderName(sender.getFullName())
+                .senderAvatar(sender.getAvatarUrl())
+                .receiverId(receiver.getUserId())
+                .message(plainText)
                 .isRead(false)
                 .createdAt(saved.getCreatedAt())
                 .type("ECHO")
@@ -114,9 +111,8 @@ public class ChatService {
                 echo
         );
 
-        // ================= 🔔 NOTIFICATION =================
+        // ================= NOTIFICATION =================
         if (shouldNotify) {
-
             log.info("🔥 SEND NOTIFICATION → {}", receiver.getUsername());
 
             notificationService.createNotification(
@@ -144,13 +140,16 @@ public class ChatService {
 
         for (ChatMessage m : messages) {
             String plain = encryptionService.safeDecrypt(m.getMessageContent());
-            if (plain == null) plain = ""; // null chỉ khi content trống
-            m.setMessageContent(plain);
-            result.add(mapper.toResponse(m));
+            if (plain == null) plain = "";
+
+            ChatMessageResponse resp = mapper.toResponse(m);
+            resp.setMessage(plain);
+            result.add(resp);
         }
 
         return result;
     }
+
 
     @Transactional(readOnly = true)
     public List<ConversationResponse> getMyChats(UUID userId) {
@@ -164,7 +163,7 @@ public class ChatService {
                     : m.getSender();
 
             String lastMsg = encryptionService.safeDecrypt(m.getMessageContent());
-            if (lastMsg == null) lastMsg = ""; // sidebar chỉ hiện preview, để trống là ổn
+            if (lastMsg == null) lastMsg = "";
 
             long unread = chatRepo.countUnread(partner.getUserId(), userId);
 
@@ -180,6 +179,7 @@ public class ChatService {
 
         return result;
     }
+
 
     @Transactional
     public void markAsRead(MarkReadRequest req) {
