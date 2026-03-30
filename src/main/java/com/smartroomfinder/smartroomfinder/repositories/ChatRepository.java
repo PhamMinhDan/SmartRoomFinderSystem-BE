@@ -15,6 +15,25 @@ import java.util.UUID;
 @Repository
 public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
 
+    /**
+     * Lấy lịch sử hội thoại — JOIN FETCH cả attachments để tránh N+1.
+     */
+    @Query("""
+        SELECT DISTINCT m FROM ChatMessage m
+        JOIN FETCH m.sender
+        JOIN FETCH m.receiver
+        LEFT JOIN FETCH m.attachments
+        WHERE m.isDeleted = false
+          AND (
+            (m.sender.userId = :user1 AND m.receiver.userId = :user2)
+            OR
+            (m.sender.userId = :user2 AND m.receiver.userId = :user1)
+          )
+        ORDER BY m.createdAt ASC
+    """)
+    List<ChatMessage> getConversationWithAttachments(@Param("user1") UUID user1,
+                                                     @Param("user2") UUID user2);
+
     @Query("""
         SELECT m FROM ChatMessage m
         JOIN FETCH m.sender
@@ -29,11 +48,11 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     """)
     List<ChatMessage> getConversation(@Param("user1") UUID user1, @Param("user2") UUID user2);
 
-
     @Query("""
-        SELECT m FROM ChatMessage m
+        SELECT DISTINCT m FROM ChatMessage m
         JOIN FETCH m.sender s
         JOIN FETCH m.receiver r
+        LEFT JOIN FETCH m.attachments
         WHERE m.isDeleted = false
           AND m.createdAt IN (
             SELECT MAX(cm.createdAt)
@@ -51,7 +70,6 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     """)
     List<ChatMessage> findLatestConversations(@Param("userId") UUID userId);
 
-
     @Query("""
         SELECT COUNT(m) FROM ChatMessage m
         WHERE m.sender.userId = :senderId
@@ -60,7 +78,6 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
           AND m.isDeleted = false
     """)
     long countUnread(@Param("senderId") UUID senderId, @Param("receiverId") UUID receiverId);
-
 
     @Modifying
     @Transactional
@@ -71,30 +88,27 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
           AND m.receiver.userId = :receiverId
           AND m.isRead = false
     """)
-    int markAsRead(
-            @Param("senderId") UUID senderId,
-            @Param("receiverId") UUID receiverId,
-            @Param("readAt") LocalDateTime readAt
-    );
+    int markAsRead(@Param("senderId") UUID senderId,
+                   @Param("receiverId") UUID receiverId,
+                   @Param("readAt") LocalDateTime readAt);
 
     @Query("""
-SELECT COUNT(m) FROM ChatMessage m
-WHERE (
-    (m.sender.userId = :user1 AND m.receiver.userId = :user2)
-    OR
-    (m.sender.userId = :user2 AND m.receiver.userId = :user1)
-)
-""")
-    long countConversation(UUID user1, UUID user2);
-
+        SELECT COUNT(m) FROM ChatMessage m
+        WHERE (
+            (m.sender.userId = :user1 AND m.receiver.userId = :user2)
+            OR
+            (m.sender.userId = :user2 AND m.receiver.userId = :user1)
+        )
+    """)
+    long countConversation(@Param("user1") UUID user1, @Param("user2") UUID user2);
 
     @Query("""
-SELECT MAX(m.createdAt) FROM ChatMessage m
-WHERE (
-    (m.sender.userId = :user1 AND m.receiver.userId = :user2)
-    OR
-    (m.sender.userId = :user2 AND m.receiver.userId = :user1)
-)
-""")
-    LocalDateTime getLastMessageTime(UUID user1, UUID user2);
+        SELECT MAX(m.createdAt) FROM ChatMessage m
+        WHERE (
+            (m.sender.userId = :user1 AND m.receiver.userId = :user2)
+            OR
+            (m.sender.userId = :user2 AND m.receiver.userId = :user1)
+        )
+    """)
+    LocalDateTime getLastMessageTime(@Param("user1") UUID user1, @Param("user2") UUID user2);
 }

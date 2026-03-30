@@ -1,6 +1,8 @@
 package com.smartroomfinder.smartroomfinder.controllers;
 
 import com.smartroomfinder.smartroomfinder.dto.request.ChatMessageRequest;
+import com.smartroomfinder.smartroomfinder.dto.request.ChatReactionRequest;
+import com.smartroomfinder.smartroomfinder.dto.request.ChatRecallRequest;
 import com.smartroomfinder.smartroomfinder.dto.response.ChatMessageResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.ConversationResponse;
 import com.smartroomfinder.smartroomfinder.services.ChatService;
@@ -39,4 +41,14 @@ public class ChatController {
     public ResponseEntity<ChatMessageResponse> sendMessage(@RequestBody ChatMessageRequest request) throws Exception {
         return ResponseEntity.ok(chatService.saveAndSend(request));
     }
+    @PostMapping("/react")
+    public ResponseEntity<ChatMessageResponse> react(@RequestBody ChatReactionRequest request) {
+        return ResponseEntity.ok(chatService.reactToMessage(request));
+    }
+
+    @PostMapping("/recall")
+    public ResponseEntity<ChatMessageResponse> recall(@RequestBody ChatRecallRequest request) {
+        return ResponseEntity.ok(chatService.recallMessage(request));
+    }
+
 }

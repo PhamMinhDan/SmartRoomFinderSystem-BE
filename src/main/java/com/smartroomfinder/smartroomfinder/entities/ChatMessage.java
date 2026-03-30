@@ -5,6 +5,8 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
@@ -14,11 +16,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_created_at", columnList = "created_at")
         }
 )
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class ChatMessage {
 
     @Id
@@ -37,7 +35,7 @@ public class ChatMessage {
     @JoinColumn(name = "receiver_id", nullable = false)
     private Users receiver;
 
-    @Column(name = "message_content", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "message_content", columnDefinition = "TEXT")
     private String messageContent;
 
     @Builder.Default
@@ -54,7 +52,29 @@ public class ChatMessage {
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted = false;
 
+    @Builder.Default
+    @Column(name = "recalled_for_all", nullable = false)
+    private Boolean recalledForAll = false;
+
+    @Builder.Default
+    @Column(name = "recalled_for_sender", nullable = false)
+    private Boolean recalledForSender = false;
+
+    @Column(name = "recalled_at")
+    private LocalDateTime recalledAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "message", cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY, orphanRemoval = true)
+    @OrderBy("sortOrder ASC")
+    private List<ChatAttachment> attachments = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "message", cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<ChatReaction> reactions = new ArrayList<>();
 }
