@@ -26,6 +26,7 @@ public interface RoomMapper {
     @Mapping(target = "expiredAt",      source = "displayUntil")
     @Mapping(target = "images",         expression = "java(mapImages(room.getImages()))")
     @Mapping(target = "amenities",      expression = "java(mapAmenities(room.getAmenities()))")
+    @Mapping(target = "rejectedByAdmin", source = "rejectedByAdmin")
     RoomResponse toResponse(Rooms room);
 
     List<RoomResponse> toResponseList(List<Rooms> rooms);

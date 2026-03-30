@@ -82,6 +82,10 @@ public class Rooms {
     @Builder.Default
     private Boolean isApproved = false;
 
+    @Column(name = "rejected_by_admin")
+    @Builder.Default
+    private Boolean rejectedByAdmin = false;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;

@@ -123,6 +123,7 @@ public class AdminService {
 
         room.setIsApproved(false);
         room.setIsActive(false);
+        room.setRejectedByAdmin(true);
         roomRepository.save(room);
 
         log.info("Room rejected by admin - roomId: {}, reason: {}", roomId, reason);

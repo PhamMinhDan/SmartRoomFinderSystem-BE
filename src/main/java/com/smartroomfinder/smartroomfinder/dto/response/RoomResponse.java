@@ -34,6 +34,7 @@ public class RoomResponse {
     private String availabilityStatus;
     private Boolean isVerified;
     private Boolean isApproved;
+    private Boolean rejectedByAdmin;
     private Boolean isActive;
     private Integer viewCount;
     private BigDecimal averageRating;
