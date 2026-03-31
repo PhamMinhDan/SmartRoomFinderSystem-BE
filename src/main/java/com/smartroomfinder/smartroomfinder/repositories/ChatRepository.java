@@ -15,9 +15,6 @@ import java.util.UUID;
 @Repository
 public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
 
-    /**
-     * Lấy lịch sử hội thoại — JOIN FETCH cả attachments để tránh N+1.
-     */
     @Query("""
         SELECT DISTINCT m FROM ChatMessage m
         JOIN FETCH m.sender
@@ -48,14 +45,15 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     """)
     List<ChatMessage> getConversation(@Param("user1") UUID user1, @Param("user2") UUID user2);
 
+
     @Query("""
-        SELECT DISTINCT m FROM ChatMessage m
+        SELECT m FROM ChatMessage m
         JOIN FETCH m.sender s
         JOIN FETCH m.receiver r
         LEFT JOIN FETCH m.attachments
         WHERE m.isDeleted = false
-          AND m.createdAt IN (
-            SELECT MAX(cm.createdAt)
+          AND m.messageId IN (
+            SELECT MAX(cm.messageId)
             FROM ChatMessage cm
             WHERE cm.isDeleted = false
               AND (cm.sender.userId = :userId OR cm.receiver.userId = :userId)
@@ -65,7 +63,6 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
                 ELSE cm.sender.userId
               END
           )
-          AND (m.sender.userId = :userId OR m.receiver.userId = :userId)
         ORDER BY m.createdAt DESC
     """)
     List<ChatMessage> findLatestConversations(@Param("userId") UUID userId);
