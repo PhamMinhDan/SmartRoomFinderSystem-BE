@@ -3,7 +3,7 @@ package com.smartroomfinder.smartroomfinder.controllers;
 import com.smartroomfinder.smartroomfinder.dto.request.RefreshTokenRequest;
 import com.smartroomfinder.smartroomfinder.dto.response.ApiResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.AuthGoogleResponse;
-import com.smartroomfinder.smartroomfinder.dto.response.UserResponse;
+import com.smartroomfinder.smartroomfinder.exceptions.UserBannedException;
 import com.smartroomfinder.smartroomfinder.services.AuthGoogleService;
 import com.smartroomfinder.smartroomfinder.services.UserService;
 import com.smartroomfinder.smartroomfinder.utils.JwtUtil;
@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,7 +32,7 @@ public class AuthGoogleController {
     private final JwtUtil jwtUtil;
 
     @PostMapping("/google-login")
-    public ResponseEntity<ApiResponse<AuthGoogleResponse>> googleLogin(
+    public ResponseEntity<ApiResponse<?>> googleLogin(
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -51,21 +52,42 @@ public class AuthGoogleController {
                     ApiResponse.success(authGGResponse, "Google login successful")
             );
 
-        } catch (GeneralSecurityException | IOException e) {
-            log.error("Google login error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(
-                            "Failed to authenticate with Google",
-                            e.getMessage()
-                    ));
         } catch (Exception e) {
+            Throwable cause = unwrap(e);
+
+            if (cause instanceof UserBannedException bannedEx) {
+                log.warn("Banned user attempted login");
+
+                Map<String, Object> banInfo = new HashMap<>();
+                banInfo.put("ban_reason", bannedEx.getBanReason() != null && !bannedEx.getBanReason().isBlank()
+                        ? bannedEx.getBanReason()
+                        : "Vi phạm quy định sử dụng dịch vụ");
+                banInfo.put("banned_at", bannedEx.getBannedAt() != null
+                        ? bannedEx.getBannedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                        : null);
+
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.error("Tài khoản của bạn đã bị khóa", "USER_BANNED", banInfo));
+            }
+
+            if (cause instanceof GeneralSecurityException || cause instanceof IOException) {
+                log.error("Google login error: {}", cause.getMessage());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Failed to authenticate with Google", cause.getMessage()));
+            }
+
             log.error("Unexpected error during Google login: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(
-                            "An unexpected error occurred",
-                            e.getMessage()
-                    ));
+                    .body(ApiResponse.error("An unexpected error occurred", e.getMessage()));
         }
+    }
+
+    private Throwable unwrap(Throwable t) {
+        Throwable cause = t;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause;
     }
 
     @PostMapping("/logout")
@@ -92,9 +114,7 @@ public class AuthGoogleController {
 
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@RequestBody RefreshTokenRequest request) {
-
         try {
-
             String refreshToken = request.getRefreshToken();
 
             if (refreshToken == null || refreshToken.isEmpty()) {
@@ -112,11 +132,7 @@ public class AuthGoogleController {
             String userId = claims.get("userId", String.class);
             Integer tokenVersion = claims.get("tokenVersion", Integer.class);
 
-            String newAccessToken = jwtUtil.generateAccessToken(
-                    username,
-                    userId,
-                    tokenVersion
-            );
+            String newAccessToken = jwtUtil.generateAccessToken(username, userId, tokenVersion);
 
             Map<String, String> response = new HashMap<>();
             response.put("accessToken", newAccessToken);
@@ -129,5 +145,4 @@ public class AuthGoogleController {
             return ResponseEntity.status(401).body("Invalid refresh token");
         }
     }
-
 }

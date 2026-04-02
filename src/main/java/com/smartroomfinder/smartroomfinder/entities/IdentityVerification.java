@@ -28,7 +28,7 @@ public class IdentityVerification {
     @JoinColumn(name = "user_id", nullable = false)
     private Users user;
 
-    @Column(name = "phone_number", length = 20)
+    @Column(name = "phone_number", length = 500)
     private String phoneNumber;
 
     // CCCD / Hộ chiếu / Bằng lái

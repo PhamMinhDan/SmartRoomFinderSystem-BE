@@ -15,7 +15,7 @@ public class CloudinaryService {
     @Autowired
     private Cloudinary cloudinary;
 
-    public String uploadFile(MultipartFile file) throws IOException {
+    public String uploadFile(MultipartFile file, String secureId) throws IOException {
 
         Map<String, Object> options = new HashMap<>();
 
@@ -34,6 +34,7 @@ public class CloudinaryService {
             options.put("height", 2000);
         }
 
+        options.put("public_id", secureId);
 
         options.put("chunk_size", 6000000); // 6MB
 

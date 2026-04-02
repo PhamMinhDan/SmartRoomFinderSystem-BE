@@ -11,6 +11,31 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "Rooms.withAddress",
+                attributeNodes = @NamedAttributeNode("roomAddress")
+        ),
+        @NamedEntityGraph(
+                name = "Rooms.withAddressAndImages",
+                attributeNodes = {
+                        @NamedAttributeNode("roomAddress"),
+                        @NamedAttributeNode("images")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "Rooms.withAll",
+                attributeNodes = {
+                        @NamedAttributeNode("roomAddress"),
+                        @NamedAttributeNode("images"),
+                        @NamedAttributeNode(value = "amenities", subgraph = "amenities.withAmenity")
+                },
+                subgraphs = @NamedSubgraph(
+                        name = "amenities.withAmenity",
+                        attributeNodes = @NamedAttributeNode("amenity")
+                )
+        )
+})
 @Entity
 @Table(
         name = "rooms",

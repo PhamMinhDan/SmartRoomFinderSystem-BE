@@ -4,6 +4,7 @@ import com.smartroomfinder.smartroomfinder.entities.Rooms;
 import com.smartroomfinder.smartroomfinder.entities.Users;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,7 +17,6 @@ import java.util.Optional;
 @Repository
 public interface RoomRepository extends JpaRepository<Rooms, Long> {
 
-    Page<Rooms> findByLandlordAndIsActiveTrue(Users landlord, Pageable pageable);
 
     @Query("""
         SELECT DISTINCT r FROM Rooms r
@@ -93,11 +93,15 @@ public interface RoomRepository extends JpaRepository<Rooms, Long> {
     );
 
     // ── Admin queries ─────────────────────────────────────────────
+    @EntityGraph(value = "Rooms.withAddress")
     Page<Rooms> findByIsApprovedFalseAndIsActiveTrue(Pageable pageable);
+    @EntityGraph(value = "Rooms.withAddress")
     Page<Rooms> findByIsApprovedAndIsActiveTrue(Boolean isApproved, Pageable pageable);
+    @EntityGraph(value = "Rooms.withAddress")
     Page<Rooms> findByIsActiveTrue(Pageable pageable);
     long countByIsApprovedFalseAndIsActiveTrue();
     long countByIsApprovedTrueAndIsActiveTrue();
+    @EntityGraph(value = "Rooms.withAddress")
     Page<Rooms> findByLandlord(Users landlord, Pageable pageable);
     long countByLandlord(Users landlord);
 }

@@ -10,6 +10,7 @@ import com.smartroomfinder.smartroomfinder.mappers.IdentityVerificationMapper;
 import com.smartroomfinder.smartroomfinder.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,11 +29,13 @@ public class IdentityVerificationService {
     private final AmenityRepository amenityRepository;
     private final IdentityVerificationMapper mapper;
     private final AmenityMapper amenityMapper;
-    private final NotificationService notificationService;   // ← inject
+    private final NotificationService notificationService;
+    private final EncryptionService encryptionService;
 
-    private static final String ADMIN_URL = "http://localhost:4200/admin/pending-posts";
+    @Value("${app.frontend-url}")
+    private String frontendBase;
 
-    // ── Submit verification → notify + email admin ────────────────
+    // ── Submit verification → mã hóa dữ liệu nhạy cảm trước khi lưu ─────────
     @Transactional
     public IdentityVerificationResponse submitVerification(
             IdentityVerificationRequest req, UUID userId) {
@@ -49,31 +52,42 @@ public class IdentityVerificationService {
         });
 
         if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
-            user.setPhoneNumber(req.getPhoneNumber());
+            try {
+                user.setPhoneNumber(req.getPhoneNumber());
+            } catch (Exception e) {
+                log.error("Failed to encrypt phone for user {}: {}", userId, e.getMessage());
+                user.setPhoneNumber(req.getPhoneNumber());
+            }
             userRepository.save(user);
         }
 
+        String encryptedPhone      = safeEncrypt(req.getPhoneNumber());
+        String encryptedFrontUrl   = safeEncrypt(req.getFrontImageUrl());
+        String encryptedBackUrl    = safeEncrypt(req.getBackImageUrl());
+        String encryptedSelfieUrl  = req.getSelfieImageUrl() != null
+                ? safeEncrypt(req.getSelfieImageUrl())
+                : null;
+
         IdentityVerification iv = IdentityVerification.builder()
                 .user(user)
-                .phoneNumber(req.getPhoneNumber())
+                .phoneNumber(encryptedPhone)
                 .documentType(req.getDocumentType())
-                .frontImageUrl(req.getFrontImageUrl())
-                .backImageUrl(req.getBackImageUrl())
-                .selfieImageUrl(req.getSelfieImageUrl())
+                .frontImageUrl(encryptedFrontUrl)
+                .backImageUrl(encryptedBackUrl)
+                .selfieImageUrl(encryptedSelfieUrl)
                 .status("pending")
                 .build();
 
         IdentityVerification saved = verificationRepository.save(iv);
-        log.info("Identity verification submitted - userId: {}", userId);
+        log.info("Identity verification submitted (encrypted) - userId: {}", userId);
 
         // ── Notify + Email tất cả admin ───────────────────────────
         String userName = user.getFullName() != null ? user.getFullName() : user.getEmail();
         String notiTitle = "Yêu cầu xác thực danh tính mới";
         String notiContent = userName + " vừa gửi yêu cầu xác thực danh tính. Vui lòng kiểm duyệt.";
-        String adminVerifyUrl = "http://localhost:4200/admin/pending-posts"; // tab verifications nếu có
+        String adminVerifyUrl = frontendBase + "/admin/pending-posts";
 
         notificationService.notifyAllAdmins(notiTitle, notiContent, adminVerifyUrl, "VERIFICATION");
-
         notificationService.sendEmailToAllAdmins(
                 "[SmartRoomFinder] Yêu cầu xác thực danh tính mới",
                 "Xin chào Admin,\n\n"
@@ -85,21 +99,22 @@ public class IdentityVerificationService {
                         + "Trân trọng,\nSmartRoomFinder System"
         );
 
-        return mapper.toResponse(saved);
+        // Trả về response đã giải mã (người dùng thấy thông tin gốc của họ)
+        return toDecryptedResponse(saved);
     }
 
-    // ── Get current status ────────────────────────────────────────
+    // ── Lấy trạng thái xác thực của user hiện tại ────────────────
     @Transactional(readOnly = true)
     public IdentityVerificationResponse getMyVerification(UUID userId) {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
         return verificationRepository.findTopByUserOrderByCreatedAtDesc(user)
-                .map(mapper::toResponse)
+                .map(this::toDecryptedResponse)
                 .orElse(null);
     }
 
-    // ── Admin: Approve → notify + email user ──────────────────────
+    // ── Admin: Approve → giải mã, cập nhật user, notify ──────────
     @Transactional
     public IdentityVerificationResponse approveVerification(Long verificationId) {
         IdentityVerification iv = verificationRepository.findById(verificationId)
@@ -112,7 +127,10 @@ public class IdentityVerificationService {
         Users user = iv.getUser();
         user.setIdentityVerified(true);
         user.setIdentityVerifiedAt(LocalDateTime.now());
-        if (iv.getPhoneNumber() != null) user.setPhoneNumber(iv.getPhoneNumber());
+
+        if (iv.getPhoneNumber() != null) {
+            user.setPhoneNumber(encryptionService.safeDecrypt(iv.getPhoneNumber()));
+        }
 
         Roles landlordRole = roleRepository.findByRoleName("LANDLORD")
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy role LANDLORD"));
@@ -125,28 +143,26 @@ public class IdentityVerificationService {
 
         log.info("Identity approved - userId: {}, promoted to LANDLORD", user.getUserId());
 
-        // ── Notify + Email user ────────────────────────────────────
         notificationService.createNotification(
                 user.getUserId(),
                 "Xác thực danh tính thành công ",
                 "Tài khoản của bạn đã được xác minh danh tính. Bạn có thể đăng tin cho thuê phòng ngay bây giờ!",
-                "http://localhost:4200/post-room"
+                frontendBase + "/post-room"
         );
-
         notificationService.sendEmail(
                 user.getEmail(),
                 "[SmartRoomFinder] Xác thực danh tính thành công",
                 "Xin chào " + user.getFullName() + ",\n\n"
                         + "Chúc mừng! Tài khoản của bạn đã được xác minh danh tính thành công.\n"
                         + "Bạn đã được nâng lên cấp độ Chủ nhà (LANDLORD) và có thể đăng tin cho thuê phòng.\n\n"
-                        + "Truy cập ngay: http://localhost:4200/post-room\n\n"
+                        + "Truy cập ngay: " + frontendBase + "/post-room\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
         );
 
-        return mapper.toResponse(iv);
+        return toDecryptedResponse(iv);
     }
 
-    // ── Admin: Reject → notify + email user ──────────────────────
+    // ── Admin: Reject → notify ────────────────────────────────────
     @Transactional
     public IdentityVerificationResponse rejectVerification(Long verificationId, String reason) {
         IdentityVerification iv = verificationRepository.findById(verificationId)
@@ -161,14 +177,12 @@ public class IdentityVerificationService {
 
         Users user = iv.getUser();
 
-        // ── Notify + Email user ────────────────────────────────────
         notificationService.createNotification(
                 user.getUserId(),
                 "Xác thực danh tính bị từ chối ",
                 "Yêu cầu xác thực của bạn đã bị từ chối. Lý do: " + reason + ". Vui lòng thử lại.",
-                "http://localhost:4200/verify-identity"
+                frontendBase + "/verify-identity"
         );
-
         notificationService.sendEmail(
                 user.getEmail(),
                 "[SmartRoomFinder] Yêu cầu xác thực danh tính bị từ chối",
@@ -176,13 +190,14 @@ public class IdentityVerificationService {
                         + "Yêu cầu xác thực danh tính của bạn đã bị từ chối.\n"
                         + "Lý do: " + reason + "\n\n"
                         + "Vui lòng kiểm tra lại hồ sơ và gửi lại yêu cầu:\n"
-                        + "http://localhost:4200/verify-identity\n\n"
+                        + frontendBase + "/verify-identity\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
         );
 
-        return mapper.toResponse(iv);
+        return toDecryptedResponse(iv);
     }
 
+    // ── Promote to LANDLORD nếu đã verified ──────────────────────
     @Transactional
     public void promoteToLandlordIfVerified(UUID userId) {
         Users user = userRepository.findById(userId)
@@ -200,18 +215,13 @@ public class IdentityVerificationService {
         }
     }
 
+    // ── Amenity helpers (giữ nguyên) ──────────────────────────────
     public List<AmenityResponse> getAll() {
-        return amenityRepository.findAll()
-                .stream()
-                .map(amenityMapper::toResponse)
-                .toList();
+        return amenityRepository.findAll().stream().map(amenityMapper::toResponse).toList();
     }
 
     public List<AmenityResponse> getActive() {
-        return amenityRepository.findByIsActiveTrue()
-                .stream()
-                .map(amenityMapper::toResponse)
-                .toList();
+        return amenityRepository.findByIsActiveTrue().stream().map(amenityMapper::toResponse).toList();
     }
 
     public AmenityResponse getById(Long id) {
@@ -224,8 +234,7 @@ public class IdentityVerificationService {
         if (amenityRepository.existsByAmenityNameIgnoreCase(request.getAmenityName())) {
             throw new RuntimeException("Amenity already exists");
         }
-        Amenities entity = amenityMapper.toEntity(request);
-        return amenityMapper.toResponse(amenityRepository.save(entity));
+        return amenityMapper.toResponse(amenityRepository.save(amenityMapper.toEntity(request)));
     }
 
     public AmenityResponse update(Long id, AmenityRequest request) {
@@ -236,8 +245,33 @@ public class IdentityVerificationService {
     }
 
     public void delete(Long id) {
-        Amenities amenity = amenityRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Amenity not found"));
-        amenityRepository.delete(amenity);
+        amenityRepository.delete(amenityRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Amenity not found")));
+    }
+
+    // ── Private helpers ───────────────────────────────────────────
+
+    public IdentityVerificationResponse toDecryptedResponse(IdentityVerification iv) {
+        IdentityVerificationResponse resp = mapper.toResponse(iv);
+
+        // Giải mã các field nhạy cảm trước khi trả về cho client
+        resp.setPhoneNumber(encryptionService.safeDecrypt(iv.getPhoneNumber()));
+        resp.setFrontImageUrl(encryptionService.safeDecrypt(iv.getFrontImageUrl()));
+        resp.setBackImageUrl(encryptionService.safeDecrypt(iv.getBackImageUrl()));
+        if (iv.getSelfieImageUrl() != null) {
+            resp.setSelfieImageUrl(encryptionService.safeDecrypt(iv.getSelfieImageUrl()));
+        }
+
+        return resp;
+    }
+
+    private String safeEncrypt(String value) {
+        if (value == null || value.isBlank()) return value;
+        try {
+            return encryptionService.encrypt(value);
+        } catch (Exception e) {
+            log.warn("Encryption failed, storing plaintext. Error: {}", e.getMessage());
+            return value;
+        }
     }
 }

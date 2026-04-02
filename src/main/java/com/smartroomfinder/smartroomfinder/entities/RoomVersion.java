@@ -8,6 +8,14 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
+@NamedEntityGraph(
+        name = "RoomVersion.withRoomAndUsers",
+        attributeNodes = {
+                @NamedAttributeNode("room"),
+                @NamedAttributeNode("requestedBy"),
+                @NamedAttributeNode("reviewedBy")
+        }
+)
 @Entity
 @Table(
         name = "room_edit_requests",

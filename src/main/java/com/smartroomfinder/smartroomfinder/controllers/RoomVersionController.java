@@ -24,7 +24,7 @@ import java.util.UUID;
 public class RoomVersionController {
 
     private final RoomVersionService VersionService;
-    private final UserRepository         userRepository;
+    private final UserRepository userRepository;
 
     // ══════════════════════════════════════════════════════════════
     // LANDLORD endpoints  →  /api/rooms/{id}/edit-request

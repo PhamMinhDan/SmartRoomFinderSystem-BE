@@ -6,6 +6,7 @@ import com.smartroomfinder.smartroomfinder.dto.response.AuthGoogleResponse;
 import com.smartroomfinder.smartroomfinder.dto.response.UserResponse;
 import com.smartroomfinder.smartroomfinder.entities.Roles;
 import com.smartroomfinder.smartroomfinder.entities.Users;
+import com.smartroomfinder.smartroomfinder.exceptions.UserBannedException;
 import com.smartroomfinder.smartroomfinder.mappers.UserMapper;
 import com.smartroomfinder.smartroomfinder.repositories.RoleRepository;
 import com.smartroomfinder.smartroomfinder.repositories.UserRepository;
@@ -58,6 +59,14 @@ public class AuthGoogleService {
                 userInfo.emailVerified
         );
 
+        if (Boolean.TRUE.equals(user.getIsBanned())) {
+            log.warn("Banned user attempted login - UserId: {}, Email: {}", user.getUserId(), user.getEmail());
+            throw new UserBannedException(
+                    user.getBanReason(),
+                    user.getBannedAt()
+            );
+        }
+
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
@@ -72,8 +81,6 @@ public class AuthGoogleService {
                 user.getUserId().toString(),
                 user.getTokenVersion()
         );
-
-        userRepository.save(user);
 
         log.info("User authenticated successfully - UserId: {}", user.getUserId());
 
@@ -140,7 +147,7 @@ public class AuthGoogleService {
         JsonNode userInfo = mapper.readTree(userInfoResponse.body());
 
         return new GoogleUserInfo(
-                userInfo.path("sub").asText(),          // googleId
+                userInfo.path("sub").asText(),
                 userInfo.path("email").asText(),
                 userInfo.path("name").asText(null),
                 userInfo.path("picture").asText(null),
@@ -162,28 +169,32 @@ public class AuthGoogleService {
 
         Optional<Users> existingUser = userRepository.findByGoogleId(googleId);
         if (existingUser.isPresent()) {
-            log.info("User found by Google ID: {}", googleId);
+            log.info("Existing user found by Google ID: {}", googleId);
             Users user = existingUser.get();
-            if (picture != null && !picture.isEmpty()) user.setAvatarUrl(picture);
+            if (picture != null && !picture.isEmpty()) {
+                user.setAvatarUrl(picture);
+            }
             user.setOauthEmailVerified(emailVerified);
             return user;
         }
 
         Optional<Users> userByEmail = userRepository.findByEmail(email);
         if (userByEmail.isPresent()) {
-            log.info("User found by email: {}", email);
+            log.info("Existing user found by email, linking Google account: {}", email);
             Users user = userByEmail.get();
             if (user.getGoogleId() == null) {
                 user.setGoogleId(googleId);
                 user.setAuthProvider("GOOGLE");
                 user.setIsOAuthUser(true);
             }
-            if (picture != null && !picture.isEmpty()) user.setAvatarUrl(picture);
+            if (picture != null && !picture.isEmpty()) {
+                user.setAvatarUrl(picture);
+            }
             user.setOauthEmailVerified(emailVerified);
             return user;
         }
 
-        log.info("Creating new user from Google - Email: {}", email);
+        log.info("No existing user found, creating new account for email: {}", email);
 
         Roles userRole = rolesRepository.findByRoleName("RENTER")
                 .orElseThrow(() -> new RuntimeException("RENTER role not found"));
@@ -197,7 +208,6 @@ public class AuthGoogleService {
                 .avatarUrl(picture)
                 .isOAuthUser(true)
                 .oauthEmailVerified(emailVerified)
-                .passwordHash("")
                 .isActive(true)
                 .isBanned(false)
                 .identityVerified(false)
