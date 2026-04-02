@@ -51,6 +51,12 @@ public class UserResponse {
     @JsonProperty("is_banned")
     private Boolean isBanned;
 
+    @JsonProperty("ban_reason")
+    private Boolean banReason;
+
+    @JsonProperty("banned_at")
+    private Boolean banned_At;
+
     @JsonProperty("auth_provider")
     private String authProvider;
 

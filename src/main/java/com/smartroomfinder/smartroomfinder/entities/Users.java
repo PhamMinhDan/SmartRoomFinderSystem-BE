@@ -45,10 +45,7 @@ public class Users {
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
-    private String passwordHash;
-
-    @Column(name = "phone_number", length = 20)
+    @Column(name = "phone_number", length = 500)
     private String phoneNumber;
 
     @Column(name = "full_name", nullable = false, length = 255)
@@ -63,9 +60,6 @@ public class Users {
     @ManyToOne
     @JoinColumn(name = "address_id")
     private Addresses address;
-
-    @Column(name = "identity_card", unique = true, length = 20)
-    private String identityCard;
 
     @Column(name = "identity_verified", nullable = false)
     private Boolean identityVerified = false;
@@ -91,8 +85,6 @@ public class Users {
     @Column(name = "google_id", length = 255, unique = true)
     private String googleId;
 
-    @Column(name = "facebook_id", length = 255, unique = true)
-    private String facebookId;
 
     @Column(name = "is_oauth_user")
     private Boolean isOAuthUser = false;

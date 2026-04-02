@@ -10,6 +10,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@NamedEntityGraph(
+        name = "Reviews.withUser",
+        attributeNodes = @NamedAttributeNode("user")
+)
 @Entity
 @Table(
         name = "reviews",

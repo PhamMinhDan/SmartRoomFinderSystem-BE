@@ -1,6 +1,7 @@
 package com.smartroomfinder.smartroomfinder.repositories;
 
 import com.smartroomfinder.smartroomfinder.entities.ChatMessage;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -31,6 +32,8 @@ public interface ChatRepository extends JpaRepository<ChatMessage, Long> {
     List<ChatMessage> getConversationWithAttachments(@Param("user1") UUID user1,
                                                      @Param("user2") UUID user2);
 
+
+    @EntityGraph(value = "ChatMessage.withSenderReceiver")
     @Query("""
         SELECT m FROM ChatMessage m
         JOIN FETCH m.sender

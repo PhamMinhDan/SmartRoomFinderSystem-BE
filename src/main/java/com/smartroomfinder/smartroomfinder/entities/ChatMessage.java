@@ -8,6 +8,25 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "ChatMessage.withSenderReceiver",
+                attributeNodes = {
+                        @NamedAttributeNode("sender"),
+                        @NamedAttributeNode("receiver")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "ChatMessage.withAll",
+                attributeNodes = {
+                        @NamedAttributeNode("sender"),
+                        @NamedAttributeNode("receiver"),
+                        @NamedAttributeNode("attachments"),
+                        @NamedAttributeNode("reactions")
+                }
+        )
+})
 @Entity
 @Table(
         name = "chat_messages",

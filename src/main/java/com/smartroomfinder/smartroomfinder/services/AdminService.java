@@ -7,6 +7,7 @@ import com.smartroomfinder.smartroomfinder.mappers.IdentityVerificationMapper;
 import com.smartroomfinder.smartroomfinder.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,8 +27,11 @@ public class AdminService {
     private final RoleRepository roleRepository;
     private final IdentityVerificationMapper verificationMapper;
     private final NotificationService notificationService;
+    private final EncryptionService encryptionService;
+    private final IdentityVerificationService identityVerificationService;
 
-    private static final String FRONTEND_BASE = "http://localhost:4200";
+    @Value("${app.frontend-url}")
+    private String frontendBase;
 
     // ── Lấy danh sách phòng chờ duyệt ────────────────────────────
     @Transactional(readOnly = true)
@@ -55,14 +59,15 @@ public class AdminService {
         return toAdminRoomResponse(room);
     }
 
-    // ── Lấy danh sách yêu cầu xác thực ───────────────────────────
+    // ── Lấy danh sách yêu cầu xác thực → giải mã trước khi trả về ───────────
     @Transactional(readOnly = true)
     public Page<IdentityVerificationResponse> getVerifications(String status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<IdentityVerification> verifications = (status != null && !status.isBlank())
                 ? verificationRepository.findByStatus(status, pageable)
                 : verificationRepository.findAll(pageable);
-        return verifications.map(verificationMapper::toResponse);
+
+        return verifications.map(identityVerificationService::toDecryptedResponse);
     }
 
     // ── Duyệt phòng ───────────────────────────────────────────────
@@ -85,13 +90,11 @@ public class AdminService {
 
         log.info("Room approved by admin - roomId: {}", roomId);
 
-        // Lấy địa chỉ từ room_addresses
         RoomAddresses addr = room.getRoomAddress();
         String addressLine = addr != null
                 ? addr.getStreetAddress() + ", " + addr.getDistrictName() + ", " + addr.getCityName()
                 : "";
-
-        String roomUrl = FRONTEND_BASE + "/rooms/" + roomId;
+        String roomUrl = frontendBase + "/rooms/" + roomId;
 
         notificationService.createNotification(
                 landlord.getUserId(),
@@ -99,7 +102,6 @@ public class AdminService {
                 "Tin đăng \"" + room.getTitle() + "\" của bạn đã được admin phê duyệt và hiển thị trên hệ thống.",
                 roomUrl
         );
-
         notificationService.sendEmail(
                 landlord.getEmail(),
                 "[SmartRoomFinder] Tin đăng của bạn đã được duyệt",
@@ -135,9 +137,8 @@ public class AdminService {
                 landlord.getUserId(),
                 "Tin đăng bị từ chối ",
                 "Tin đăng \"" + room.getTitle() + "\" đã bị từ chối. Lý do: " + rejectReason,
-                FRONTEND_BASE + "/my-posts"
+                frontendBase + "/my-posts"
         );
-
         notificationService.sendEmail(
                 landlord.getEmail(),
                 "[SmartRoomFinder] Tin đăng của bạn bị từ chối",
@@ -146,14 +147,14 @@ public class AdminService {
                         + "📌 Tiêu đề: " + room.getTitle() + "\n"
                         + "❌ Lý do: " + rejectReason + "\n\n"
                         + "Vui lòng chỉnh sửa và đăng lại:\n"
-                        + FRONTEND_BASE + "/post-room\n\n"
+                        + frontendBase + "/post-room\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
         );
 
         return toAdminRoomResponse(room);
     }
 
-    // ── Duyệt xác thực danh tính ─────────────────────────────────
+    // ── Duyệt xác thực danh tính (delegate sang IdentityVerificationService) ──
     @Transactional
     public IdentityVerificationResponse approveVerification(Long verificationId) {
         IdentityVerification iv = verificationRepository.findById(verificationId)
@@ -166,7 +167,10 @@ public class AdminService {
         Users user = iv.getUser();
         user.setIdentityVerified(true);
         user.setIdentityVerifiedAt(LocalDateTime.now());
-        if (iv.getPhoneNumber() != null) user.setPhoneNumber(iv.getPhoneNumber());
+
+        if (iv.getPhoneNumber() != null) {
+            user.setPhoneNumber(encryptionService.safeDecrypt(iv.getPhoneNumber()));
+        }
 
         Roles landlordRole = roleRepository.findByRoleName("LANDLORD")
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy role LANDLORD"));
@@ -183,20 +187,19 @@ public class AdminService {
                 user.getUserId(),
                 "Xác thực danh tính thành công ",
                 "Tài khoản của bạn đã được xác minh. Bạn có thể đăng tin cho thuê phòng ngay bây giờ!",
-                FRONTEND_BASE + "/post-room"
+                frontendBase + "/post-room"
         );
-
         notificationService.sendEmail(
                 user.getEmail(),
                 "[SmartRoomFinder] Xác thực danh tính thành công",
                 "Xin chào " + user.getFullName() + ",\n\n"
                         + "Chúc mừng! Tài khoản của bạn đã được xác minh danh tính thành công.\n"
                         + "Bạn đã được nâng lên cấp độ Chủ nhà (LANDLORD).\n\n"
-                        + "Đăng tin ngay tại: " + FRONTEND_BASE + "/post-room\n\n"
+                        + "Đăng tin ngay tại: " + frontendBase + "/post-room\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
         );
 
-        return verificationMapper.toResponse(iv);
+        return identityVerificationService.toDecryptedResponse(iv);
     }
 
     // ── Từ chối xác thực ─────────────────────────────────────────
@@ -218,20 +221,19 @@ public class AdminService {
                 user.getUserId(),
                 "Xác thực danh tính bị từ chối ",
                 "Yêu cầu xác thực bị từ chối. Lý do: " + reason + ". Vui lòng thử lại.",
-                FRONTEND_BASE + "/verify-identity"
+                frontendBase + "/verify-identity"
         );
-
         notificationService.sendEmail(
                 user.getEmail(),
                 "[SmartRoomFinder] Yêu cầu xác thực danh tính bị từ chối",
                 "Xin chào " + user.getFullName() + ",\n\n"
                         + "Yêu cầu xác thực danh tính của bạn bị từ chối.\n"
                         + "Lý do: " + reason + "\n\n"
-                        + "Vui lòng thử lại tại: " + FRONTEND_BASE + "/verify-identity\n\n"
+                        + "Vui lòng thử lại tại: " + frontendBase + "/verify-identity\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
         );
 
-        return verificationMapper.toResponse(iv);
+        return identityVerificationService.toDecryptedResponse(iv);
     }
 
     // ── Stats tổng quan ───────────────────────────────────────────
@@ -246,11 +248,9 @@ public class AdminService {
         );
     }
 
-    // ── Helper: Rooms → AdminRoomResponse ─────────────────────────
+    // ── Helper: Rooms → AdminRoomResponse (giải mã PendingVerification) ──────
     private AdminRoomResponse toAdminRoomResponse(Rooms room) {
         Users landlord = room.getLandlord();
-
-        // Lấy địa chỉ từ bảng room_addresses
         RoomAddresses addr = room.getRoomAddress();
 
         AdminRoomResponse.PendingVerification pendingVerif = null;
@@ -258,13 +258,14 @@ public class AdminService {
             var ivOpt = verificationRepository.findByUserAndStatus(landlord, "pending");
             if (ivOpt.isPresent()) {
                 IdentityVerification iv = ivOpt.get();
+
                 pendingVerif = AdminRoomResponse.PendingVerification.builder()
                         .verificationId(iv.getVerificationId())
                         .documentType(iv.getDocumentType())
-                        .frontImageUrl(iv.getFrontImageUrl())
-                        .backImageUrl(iv.getBackImageUrl())
-                        .selfieImageUrl(iv.getSelfieImageUrl())
-                        .phoneNumber(iv.getPhoneNumber())
+                        .frontImageUrl(encryptionService.safeDecrypt(iv.getFrontImageUrl()))
+                        .backImageUrl(encryptionService.safeDecrypt(iv.getBackImageUrl()))
+                        .selfieImageUrl(encryptionService.safeDecrypt(iv.getSelfieImageUrl()))
+                        .phoneNumber(encryptionService.safeDecrypt(iv.getPhoneNumber()))
                         .status(iv.getStatus())
                         .createdAt(iv.getCreatedAt())
                         .build();
@@ -281,7 +282,6 @@ public class AdminService {
                 .roomId(room.getRoomId())
                 .title(room.getTitle())
                 .description(room.getDescription())
-                // địa chỉ từ room_addresses
                 .address(addr != null ? addr.getStreetAddress() : null)
                 .cityName(addr != null ? addr.getCityName() : null)
                 .districtName(addr != null ? addr.getDistrictName() : null)

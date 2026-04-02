@@ -8,6 +8,7 @@ import com.smartroomfinder.smartroomfinder.mappers.RoomVersionMapper;
 import com.smartroomfinder.smartroomfinder.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -31,14 +32,20 @@ public class RoomVersionService {
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final RoomVersionMapper roomVersionMapper;
+    
+    @Value("${app.frontend-url")
+    private String frontendBase;
 
-    private static final String FRONTEND_BASE = "http://localhost:4200";
 
     @Transactional
     public RoomVersionResponse submitVersion(Long roomId, CreateRoomRequest req, UUID userId) {
 
         Rooms room = roomRepository.findByIdWithDetails(roomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng"));
+
+        room.setIsActive(false);
+        room.setHiddenReason("Thông tin phòng đang chờ phê duyệt");
+        room.setHiddenAt(LocalDateTime.now());
 
         if (!room.getLandlord().getUserId().equals(userId)) {
             throw new AccessDeniedException("Bạn không có quyền chỉnh sửa phòng này");
@@ -232,6 +239,9 @@ public class RoomVersionService {
             }
 
             fullRoom.setRejectedByAdmin(false);
+            fullRoom.setHiddenReason(null);
+            fullRoom.setIsActive(true);
+            fullRoom.setHiddenAt(null);
             roomRepository.save(fullRoom);
 
             // Cập nhật edit request
@@ -248,7 +258,7 @@ public class RoomVersionService {
                     landlord.getUserId(),
                     "Yêu cầu chỉnh sửa được duyệt",
                     "Yêu cầu chỉnh sửa phòng \"" + fullRoom.getTitle() + "\" đã được admin phê duyệt.",
-                    FRONTEND_BASE + "/my-posts"
+                    frontendBase + "/my-posts"
             );
             notificationService.sendEmail(
                     landlord.getEmail(),
@@ -256,7 +266,7 @@ public class RoomVersionService {
                     "Xin chào " + landlord.getFullName() + ",\n\n"
                             + "Yêu cầu chỉnh sửa thông tin phòng \"" + fullRoom.getTitle() + "\" của bạn đã được admin phê duyệt.\n"
                             + "Tin đăng đã được cập nhật hiển thị.\n\n"
-                            + "Xem tin tại: " + FRONTEND_BASE + "/my-posts\n\n"
+                            + "Xem tin tại: " + frontendBase + "/my-posts\n\n"
                             + "Trân trọng,\nSmartRoomFinder"
             );
 
@@ -299,9 +309,9 @@ public class RoomVersionService {
 
         notificationService.createNotification(
                 landlord.getUserId(),
-                "Yêu cầu chỉnh sửa bị từ chối ❌",
+                "Yêu cầu chỉnh sửa bị từ chối ",
                 "Yêu cầu chỉnh sửa phòng \"" + room.getTitle() + "\" bị từ chối. Lý do: " + rejectReason,
-                FRONTEND_BASE + "/my-posts"
+                frontendBase + "/my-posts"
         );
         notificationService.sendEmail(
                 landlord.getEmail(),
@@ -310,7 +320,7 @@ public class RoomVersionService {
                         + "Yêu cầu chỉnh sửa phòng \"" + room.getTitle() + "\" của bạn đã bị từ chối.\n"
                         + "Lý do: " + rejectReason + "\n\n"
                         + "Bạn có thể gửi lại yêu cầu chỉnh sửa sau khi cập nhật nội dung phù hợp.\n\n"
-                        + "Xem tin tại: " + FRONTEND_BASE + "/my-posts\n\n"
+                        + "Xem tin tại: " + frontendBase + "/my-posts\n\n"
                         + "Trân trọng,\nSmartRoomFinder"
         );
 
@@ -340,7 +350,7 @@ public class RoomVersionService {
                         "Yêu cầu chỉnh sửa phòng mới 📝",
                         "Landlord " + landlord.getFullName() + " gửi yêu cầu chỉnh sửa phòng \""
                                 + room.getTitle() + "\". Vui lòng kiểm tra và phê duyệt.",
-                        FRONTEND_BASE + "/admin/pending-posts"
+                        frontendBase + "/admin/pending-posts"
                 )
         );
 
@@ -354,7 +364,7 @@ public class RoomVersionService {
                                 + " Tiêu đề: " + room.getTitle() + "\n"
                                 + " Edit Request ID: " + VersionId + "\n\n"
                                 + "Truy cập trang quản trị để phê duyệt:\n"
-                                + FRONTEND_BASE + "/admin/pending-posts\n\n"
+                                + frontendBase + "/admin/pending-posts\n\n"
                                 + "Trân trọng,\nSmartRoomFinder System"
                 )
         );

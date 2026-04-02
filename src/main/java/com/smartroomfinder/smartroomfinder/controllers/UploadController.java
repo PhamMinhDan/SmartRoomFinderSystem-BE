@@ -28,9 +28,9 @@ public class UploadController {
     private CloudinaryService cloudinaryService;
 
     @PostMapping
-    public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file, @RequestParam("secureId") String secureId) {
         try {
-            String url = cloudinaryService.uploadFile(file);
+            String url = cloudinaryService.uploadFile(file, secureId);
             return ResponseEntity.ok(Map.of("url", url));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -39,7 +39,7 @@ public class UploadController {
     }
 
     @PostMapping("/chat-media")
-    public ResponseEntity<?> uploadChatMedia(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> uploadChatMedia(@RequestParam("file") MultipartFile file, @RequestParam("secureId") String secureId) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "File rỗng"));
         }
@@ -57,7 +57,7 @@ public class UploadController {
         String fileType = mime.startsWith("video") ? "VIDEO" : "IMAGE";
 
         try {
-            String url = cloudinaryService.uploadFile(file);
+            String url = cloudinaryService.uploadFile(file, secureId);
             return ResponseEntity.ok(Map.of(
                     "url",      url,
                     "fileType", fileType,
